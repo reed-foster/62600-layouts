@@ -48,7 +48,7 @@ def transistor(
     layer_set: LayerSet = LayerSet(),
     pad_size: Tuple[float, float] = (100, 100),
 ) -> Device:
-    """Creates the core of a transistor.
+    """Creates a transistor with pads.
 
     Parameters:
         L_mesa (float): length of channel mesa
@@ -150,37 +150,124 @@ def transistor(
     return TRANSISTOR
 
 
+def resistor(
+    L_mesa: float = 8,
+    L_contact: float = 2,
+    W_mesa: float = 12,
+    W_contact: float = 10,
+    layer_set: LayerSet = LayerSet(),
+    pad_size: Tuple[float, float] = (100, 100),
+) -> Device:
+    """Creates a resistor.
+
+    Parameters:
+        L_mesa (float): length of semiconductor mesa
+        L_gate (float): length of contact between metal and semiconductor
+        W_mesa (float): width of semiconductor mesa
+        W_contact (float): width of metal source/drain contacts
+        layer_set (LayerSet): layers
+        pad_size (tuple(float,float)): pad length and width
+
+    Returns:
+        Device: the created resistor
+    """
+    SOURCE = Device("source")
+    DRAIN = Device("drain")
+    LAYOUT = Device("dummy")
+    RESISTOR = Device(f"RESISTOR({L_mesa},{L_contact},{W_mesa},{W_contact})")
+
+    mesa = pg.rectangle((L_mesa, W_mesa), layer=layer_set["mesa"].gds_layer)
+    source = pg.rectangle((L_contact, W_contact), layer=layer_set["w2"].gds_layer)
+    drain = pg.rectangle((L_contact, W_contact), layer=layer_set["w2"].gds_layer)
+    mesa.move(-mesa.center)
+    source.move((mesa.xmin - source.xmax + L_contact, mesa.y - source.y))
+    drain.move((mesa.xmax - drain.xmin - L_contact, mesa.y - drain.y))
+    SOURCE << source
+    DRAIN << drain
+    LAYOUT << source
+    LAYOUT << drain
+    LAYOUT << mesa
+
+    # add pads
+    source_pad = pg.rectangle(pad_size, layer=layer_set["w2"].gds_layer)
+    drain_pad = pg.rectangle(pad_size, layer=layer_set["w2"].gds_layer)
+    source_pad.move((source.xmin - source_pad.xmax, source.ymax - source_pad.ymax))
+    drain_pad.move((drain.xmax - drain_pad.xmin, drain.ymax - drain_pad.ymax))
+    SOURCE << source_pad
+    DRAIN << drain_pad
+    LAYOUT << source_pad
+    LAYOUT << drain_pad
+
+    # add text
+    text = pg.text(
+        f"W/L\n{W_contact}/{L_mesa - 2 * L_contact}", layer=layer_set["w2"].gds_layer
+    )
+    text.move((mesa.x - text.x, drain_pad.ymax - text.ymin + 10))
+    DRAIN << text
+    LAYOUT << text
+
+    dev_area = pg.rectangle((LAYOUT.xsize + 10, LAYOUT.ysize + 10))
+    dev_area.move((LAYOUT.x - dev_area.x, LAYOUT.y - dev_area.y))
+    source = pg.union(SOURCE, layer=layer_set["w2"].gds_layer)
+    drain = pg.union(DRAIN, layer=layer_set["w2"].gds_layer)
+    mesa = pg.union(mesa, layer=layer_set["mesa"].gds_layer)
+
+    # invert for positive tone
+    if layer_set["w2"].gds_layer % 2 == 0:
+        source = RESISTOR << pg.kl_boolean(
+            A=dev_area, B=source, operation="not", layer=layer_set["w2"].gds_layer
+        )
+        drain = RESISTOR << pg.kl_boolean(
+            A=dev_area, B=drain, operation="not", layer=layer_set["w2"].gds_layer
+        )
+    else:
+        source = RESISTOR << source
+        drain = RESISTOR << drain
+    if layer_set["mesa"].gds_layer % 2 == 0:
+        mesa = RESISTOR << pg.kl_boolean(
+            A=dev_area, B=mesa, operation="not", layer=layer_set["mesa"].gds_layer
+        )
+    else:
+        mesa = RESISTOR << mesa
+
+    return RESISTOR
+
+
 def test_chip(
     L_gate: List[float] = [2, 3, 5, 10, 15, 25],
     L_overlap: List[float] = [2, 3, 5, 10],
-    W_contact: List[float] = [5, 10, 20, 50],
+    W_contact: List[float] = [5, 10, 20, 50, 100],
     L_mim: List[float] = [50, 100, 200],
+    L_resistor: List[float] = [2, 3, 5, 10, 15, 25],
+    W_resistor: List[float] = [10, 20, 50, 100],
 ) -> Device:
     # positive tone for even GDS layers, negative tone for odd GDS layers
+    neg_tone = 1
     ls = LayerSet()
     ls.add_layer(
         name="w1",
-        gds_layer=1,
+        gds_layer=0 + neg_tone,
         gds_datatype=0,
         description="tungsten gate",
         color=(0.6, 0.7, 0.9),
     )
     ls.add_layer(
         name="w2",
-        gds_layer=3,
+        gds_layer=2 + neg_tone,
         gds_datatype=0,
         description="tungsten source/drain",
         color=(0.5, 0.4, 0.4),
     )
     ls.add_layer(
         name="mesa",
-        gds_layer=5,
+        gds_layer=4 + neg_tone,
         gds_datatype=0,
         description="ito/igzo mesa",
         color=(0.6, 0.2, 0.5),
     )
     TOP = Device("top")
     TRANSISTOR_ARRAY = Device("transistors")
+    RESISTOR_ARRAY = Device("resistors")
     MIM_CAP_ARRAY = Device("mimcaps")
     ALIGNMENT = Device("alignment")
 
@@ -210,6 +297,25 @@ def test_chip(
                 dut_inst = TRANSISTOR_ARRAY << dut
                 dut_inst.move((x_offset - dut_inst.xmin, y_offset - dut_inst.ymin))
                 x_offset += pitch
+
+    x_offset = array_margin
+    y_offset = array_margin
+    for L in L_resistor:
+        for W in W_resistor:
+            dut = resistor(
+                L_mesa=L + 20,
+                L_contact=10,
+                W_mesa=2 + W,
+                W_contact=W,
+                layer_set=ls,
+                pad_size=pad_size,
+            )
+            if x_offset + pitch > array_w - array_margin:
+                x_offset = array_margin
+                y_offset += pitch
+            dut_inst = RESISTOR_ARRAY << dut
+            dut_inst.move((x_offset - dut_inst.xmin, y_offset - dut_inst.ymin))
+            x_offset += pitch
 
     x_offset = array_margin
     y_offset = array_margin
@@ -243,39 +349,24 @@ def test_chip(
             rotate_i(pos, i)
             neg.move((x_offset, y_offset))
             pos.move((x_offset, y_offset))
+            sign = (-1) ** (i // 2)
             if i == 0 or i == 3:
-                neg.move((0, (-1) ** (i // 2) * (-300)))
-                pos.move((0, (-1) ** (i // 2) * (-300)))
+                neg.move((0, sign * (-300)))
+                pos.move((0, sign * (-300)))
                 neg.move(
-                    (
-                        (-1) ** (i // 2)
-                        * (sample_w / 2 - 1000 * li - 500 - alignment_offset),
-                        0,
-                    )
+                    (sign * (sample_w / 2 - 1000 * (li + 0.5) - alignment_offset), 0)
                 )
                 pos.move(
-                    (
-                        (-1) ** (i // 2)
-                        * (sample_w / 2 + 1000 * li + 500 - alignment_offset),
-                        0,
-                    )
+                    (sign * (sample_w / 2 + 1000 * (li + 0.5) - alignment_offset), 0)
                 )
             else:
-                neg.move(((-1) ** (i // 2) * 300, 0))
-                pos.move(((-1) ** (i // 2) * 300, 0))
+                neg.move((sign * 300, 0))
+                pos.move((sign * 300, 0))
                 neg.move(
-                    (
-                        0,
-                        (-1) ** (i // 2)
-                        * (sample_w / 2 - 1000 * li - 500 - alignment_offset),
-                    )
+                    (0, sign * (sample_w / 2 - 1000 * (li + 0.5) - alignment_offset))
                 )
                 pos.move(
-                    (
-                        0,
-                        (-1) ** (i // 2)
-                        * (sample_w / 2 + 1000 * li + 500 - alignment_offset),
-                    )
+                    (0, sign * (sample_w / 2 + 1000 * (li + 0.5) - alignment_offset))
                 )
         a = TOP << align
         rotate_i(a, i)
@@ -285,17 +376,23 @@ def test_chip(
         else:
             y_offset = sample_w - alignment_offset
             x_offset = alignment_offset
-    # x_offset = 0
-    # y_offset = 0
-    # for i in range(4):
-    #    #t_array = TOP << TRANSISTOR_ARRAY
-    #    t_array = TOP << MIM_CAP_ARRAY
-    #    t_array.move((x_offset - t_array.xmin, y_offset - t_array.ymin))
-    #    if i % 2 == 0:
-    #        x_offset += sample_w
-    #    else:
-    #        y_offset += sample_w
-    #        x_offset = 0
+    dut_offset = 1200
+    x_offset = dut_offset
+    y_offset = dut_offset
+    for i in range(4):
+        t_array = TOP << TRANSISTOR_ARRAY
+        r_array = TOP << RESISTOR_ARRAY
+        t_array.move((x_offset - t_array.xmin, y_offset - t_array.ymin))
+        r_array.move((x_offset - r_array.xmin, y_offset - r_array.ymin))
+        if i // 2 == 0:
+            r_array.move((0, 200 + t_array.ysize))
+        else:
+            r_array.move((0, -200 - r_array.ysize))
+        if i % 2 == 0:
+            x_offset = sample_w - dut_offset - t_array.xsize
+        else:
+            x_offset = dut_offset
+            y_offset = sample_w - dut_offset - t_array.ysize
     return TOP
 
 
