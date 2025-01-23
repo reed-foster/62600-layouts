@@ -10,6 +10,32 @@ from typing import Tuple, List
 set_quickplot_options(blocking=True)
 
 
+def positivetoneify(
+    D: Device = None, cutout: Device = None, layer_set: LayerSet = LayerSet()
+) -> Device:
+    """Inverts device D over area specified by cutout.
+
+    Parameters:
+        D (Device): negative tone version of device
+        cutout (Device): area to apply inversion (can just be the bounding box of D + extent, or can be irregular shape)
+        layer_set (LayerSet): GDS layers
+
+    Returns:
+        Device: positive tone version
+    """
+    POS = Device(D.name)
+    for k, l in layer_set._layers.items():
+        # only do gate if L_gate is nonzero
+        if l.gds_layer % 2 == 0:
+            layer = Device()
+            for p in D.get_polygons(by_spec=(l.gds_layer, l.gds_datatype)):
+                layer.add_polygon(p, layer=l.gds_layer)
+            POS << pg.kl_boolean(A=cutout, B=layer, operation="not", layer=l.gds_layer)
+        else:
+            POS << D
+    return POS
+
+
 def mos_cap(
     L_overlap: float = 100,
     L_contact: float = 10,
@@ -30,7 +56,6 @@ def mos_cap(
     Returns:
         Device: the created MOS capacitor
     """
-    LAYOUT = Device(f"dummy")
     MOS = Device(f"MOS_CAP({L_overlap},{L_contact},{pad_size[1]})")
     bot_pad = pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
     bot_pad.move((-bot_pad.xmin, -bot_pad.ymin))
@@ -40,47 +65,20 @@ def mos_cap(
     top_pad = pg.rectangle(
         (pad_size[0] + L_contact, pad_size[1]), layer=layer_set["sourcedrain"].gds_layer
     )
-    b = LAYOUT << bot_pad
-    t = LAYOUT << top_pad
-    m = LAYOUT << mesa
+    b = MOS << bot_pad
+    t = MOS << top_pad
+    m = MOS << mesa
     b.move((-b.xmin, -b.ymin))
     m.move((pad_size[0] - m.xmin, b.y - m.y))
     t.move((pad_size[0] + L_overlap - t.xmin, b.y - t.y))
-    text = LAYOUT << pg.text(
+    text = MOS << pg.text(
         f"W/L\n{pad_size[1]}/{L_overlap}", layer=layer_set["gate"].gds_layer
     )
     text.move((t.x - text.x, t.ymax + 10 - text.ymin))
 
-    dev_area = pg.rectangle((LAYOUT.xsize + 10, LAYOUT.ysize + 10))
-    dev_area.move((LAYOUT.x - dev_area.x, LAYOUT.y - dev_area.y))
-    bot_u = pg.union(
-        pg.kl_boolean(A=b, B=text, operation="or", layer=layer_set["gate"].gds_layer),
-        layer=layer_set["gate"].gds_layer,
-    )
-    top_u = pg.union(t, layer=layer_set["sourcedrain"].gds_layer)
-    mesa_u = pg.union(m, layer=layer_set["mesa"].gds_layer)
-    if layer_set["gate"].gds_layer % 2 == 0:
-        MOS << pg.kl_boolean(
-            A=dev_area, B=bot_u, operation="not", layer=layer_set["gate"].gds_layer
-        )
-    else:
-        MOS << bot_u
-    if layer_set["sourcedrain"].gds_layer % 2 == 0:
-        MOS << pg.kl_boolean(
-            A=dev_area,
-            B=top_u,
-            operation="not",
-            layer=layer_set["sourcedrain"].gds_layer,
-        )
-    else:
-        MOS << top_u
-    if layer_set["mesa"].gds_layer % 2 == 0:
-        MOS << pg.kl_boolean(
-            A=dev_area, B=mesa_u, operation="not", layer=layer_set["mesa"].gds_layer
-        )
-    else:
-        MOS << mesa_u
-    return MOS
+    dev_area = pg.rectangle((MOS.xsize + 10, MOS.ysize + 10))
+    dev_area.move((MOS.x - dev_area.x, MOS.y - dev_area.y))
+    return positivetoneify(MOS, dev_area, layer_set)
 
 
 def mim_cap(
@@ -100,7 +98,6 @@ def mim_cap(
     Returns:
         Device: the created MIM capacitor
     """
-    LAYOUT = Device(f"dummy")
     MIM = Device(f"MIM_CAP({L_overlap},{pad_size[1]})")
     bot_pad = pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
     bot_pad.move((-bot_pad.xmin, -bot_pad.ymin))
@@ -112,40 +109,20 @@ def mim_cap(
         (L_overlap, W), layer=layer_set["sourcedrain"].gds_layer
     )
     top.move((-top.xmax, pad_size[1] / 2 - top.y))
-    b = LAYOUT << bot_pad
-    t = LAYOUT << top_pad
+    b = MIM << bot_pad
+    t = MIM << top_pad
     b.move((-b.xmin, -b.ymin))
     t.move((pad_size[0] - t.xmin, b.y - t.y))
-    text = LAYOUT << pg.text(
+    text = MIM << pg.text(
         f"W/L\n{pad_size[1]}/{L_overlap}", layer=layer_set["gate"].gds_layer
     )
     text.move(
         (t.xmax - pad_size[0] / 2 - text.x, t.y + pad_size[1] / 2 + 10 - text.ymin)
     )
 
-    dev_area = pg.rectangle((LAYOUT.xsize + 10, LAYOUT.ysize + 10))
-    dev_area.move((LAYOUT.x - dev_area.x, LAYOUT.y - dev_area.y))
-    bot_u = pg.union(
-        pg.kl_boolean(A=b, B=text, operation="or", layer=layer_set["gate"].gds_layer),
-        layer=layer_set["gate"].gds_layer,
-    )
-    top_u = pg.union(t, layer=layer_set["sourcedrain"].gds_layer)
-    if layer_set["gate"].gds_layer % 2 == 0:
-        MIM << pg.kl_boolean(
-            A=dev_area, B=bot_u, operation="not", layer=layer_set["gate"].gds_layer
-        )
-    else:
-        MIM << bot_u
-    if layer_set["sourcedrain"].gds_layer % 2 == 0:
-        MIM << pg.kl_boolean(
-            A=dev_area,
-            B=top_u,
-            operation="not",
-            layer=layer_set["sourcedrain"].gds_layer,
-        )
-    else:
-        MIM << top_u
-    return MIM
+    dev_area = pg.rectangle((MIM.xsize + 10, MIM.ysize + 10))
+    dev_area.move((MIM.x - dev_area.x, MIM.y - dev_area.y))
+    return positivetoneify(MIM, dev_area, layer_set)
 
 
 def transistor(
@@ -172,10 +149,6 @@ def transistor(
         Device: the created transistor
     """
 
-    GATE = Device("gate")
-    SOURCE = Device("source")
-    DRAIN = Device("drain")
-    LAYOUT = Device("dummy")
     TRANSISTOR = Device(
         f"TRANSISTOR({L_mesa},{L_gate},{L_overlap},{W_mesa},{W_contact})"
     )
@@ -198,14 +171,11 @@ def transistor(
     gate.move(-gate.center)
     source.move((gate.xmin - source.xmax + L_overlap, gate.y - source.y))
     drain.move((gate.xmax - drain.xmin - L_overlap, gate.y - drain.y))
-    GATE << gate
-    SOURCE << source
-    DRAIN << drain
     if L_gate != 0:
-        LAYOUT << gate
-    LAYOUT << source
-    LAYOUT << drain
-    LAYOUT << mesa
+        TRANSISTOR << gate
+    TRANSISTOR << source
+    TRANSISTOR << drain
+    TRANSISTOR << mesa
 
     # add pads
     gate_pad = pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
@@ -214,13 +184,10 @@ def transistor(
     gate_pad.move((gate.xmax - gate_pad.xmax, gate.ymax - gate_pad.ymin))
     source_pad.move((source.xmin - source_pad.xmax, source.ymax - source_pad.ymax))
     drain_pad.move((drain.xmax - drain_pad.xmin, drain.ymax - drain_pad.ymax))
-    GATE << gate_pad
-    SOURCE << source_pad
-    DRAIN << drain_pad
     if L_gate != 0:
-        LAYOUT << gate_pad
-    LAYOUT << source_pad
-    LAYOUT << drain_pad
+        TRANSISTOR << gate_pad
+    TRANSISTOR << source_pad
+    TRANSISTOR << drain_pad
 
     # add text
     if L_gate != 0:
@@ -230,85 +197,46 @@ def transistor(
         )
         # align to upper right corner
         text.move((drain_pad.x - text.x, gate_pad.y - text.y))
-        GATE << text
-        LAYOUT << text
+        TRANSISTOR << text
     else:
         text = pg.text(
             f"W/L\n{W_contact}/{L_mesa-2*L_overlap}", layer=layer_set["gate"].gds_layer
         )
         # align to drain / mesa
         text.move((mesa.x - text.x, drain_pad.ymax - text.ymin + 10))
-        DRAIN << text
-        LAYOUT << text
+        TRANSISTOR << text
 
-    dev_area = pg.rectangle((LAYOUT.xsize + 10, LAYOUT.ysize + 10))
-    dev_area.move((LAYOUT.x - dev_area.x, LAYOUT.y - dev_area.y))
-    gate = pg.union(GATE, layer=layer_set["gate"].gds_layer)
-    source = pg.union(SOURCE, layer=layer_set["sourcedrain"].gds_layer)
-    drain = pg.union(DRAIN, layer=layer_set["sourcedrain"].gds_layer)
-    mesa = pg.union(mesa, layer=layer_set["mesa"].gds_layer)
-
-    # invert each layer for positive tone, only within the device area
-    if L_gate != 0:
-        # only do gate if L_gate is nonzero
-        if layer_set["gate"].gds_layer % 2 == 0:
-            gate = TRANSISTOR << pg.kl_boolean(
-                A=dev_area, B=gate, operation="not", layer=layer_set["gate"].gds_layer
-            )
-        else:
-            gate = TRANSISTOR << gate
-    # source and drain on sourcedrain
-    if layer_set["sourcedrain"].gds_layer % 2 == 0:
-        source = TRANSISTOR << pg.kl_boolean(
-            A=dev_area,
-            B=source,
-            operation="not",
-            layer=layer_set["sourcedrain"].gds_layer,
-        )
-        drain = TRANSISTOR << pg.kl_boolean(
-            A=dev_area,
-            B=drain,
-            operation="not",
-            layer=layer_set["sourcedrain"].gds_layer,
-        )
-    else:
-        source = TRANSISTOR << source
-        drain = TRANSISTOR << drain
-    # mesa
-    if layer_set["mesa"].gds_layer % 2 == 0:
-        mesa = TRANSISTOR << pg.kl_boolean(
-            A=dev_area, B=mesa, operation="not", layer=layer_set["mesa"].gds_layer
-        )
-    else:
-        mesa = TRANSISTOR << mesa
-
-    return TRANSISTOR
+    dev_area = pg.rectangle((TRANSISTOR.xsize + 10, TRANSISTOR.ysize + 10))
+    dev_area.move((TRANSISTOR.x - dev_area.x, TRANSISTOR.y - dev_area.y))
+    return positivetoneify(TRANSISTOR, dev_area, layer_set)
 
 
-def positivetoneify(
-    D: Device = None, cutout: Device = None, layer_set: LayerSet = LayerSet()
-) -> Device:
-    """Inverts device D over area specified by cutout.
+def alignment_mark_positivetone(layer_set: LayerSet = LayerSet()) -> Device:
+    """Creates alignment marks and converts to positive tone.
 
     Parameters:
-        D (Device): negative tone version of device
-        cutout (Device): area to apply inversion (can just be the bounding box of D + extent, or can be irregular shape)
-        layer_set (LayerSet): GDS layers
+        layer_set (LayerSet): layer set to generate alignment marks for
 
     Returns:
-        Device: positive tone version
+        Device: alignment markers
     """
-    POS = Device(D.name)
-    for k, l in layer_set._layers.items():
-        # only do gate if L_gate is nonzero
-        if l.gds_layer % 2 == 0:
-            layer = Device()
-            for p in D.get_polygons(by_spec=(l.gds_layer, l.gds_datatype)):
-                layer.add_polygon(p, layer=l.gds_layer)
-            POS << pg.kl_boolean(A=cutout, B=layer, operation="not", layer=l.gds_layer)
-        else:
-            POS << D
-    return POS
+    align = alignment_mark(layers=[l.gds_layer for k, l in layer_set._layers.items()])
+    ALIGN = Device("ALIGN")
+    ## positive/negative tone
+    align_footprint = pg.rectangle((align.ysize / 2 + 10, align.ysize / 2 + 10))
+    align_area = Device()
+    for i in range(2):
+        for j in range(2):
+            if (i == j) and (i == 0):
+                continue
+            aa = align_area << align_footprint
+            aa.move(-aa.center)
+            aa.move((aa.xsize / 2 * (-1) ** i, aa.ysize / 2 * (-1) ** j))
+    numbers = align_area << pg.rectangle(
+        (align_area.xmin - align.xmin, align_area.ysize)
+    )
+    numbers.move((align_area.xmin - numbers.xmax, align_area.ymin - numbers.ymin))
+    return positivetoneify(align, align_area, layer_set)
 
 
 def test_chip(neg_tone: int = 0) -> Device:
@@ -359,56 +287,14 @@ def test_chip(neg_tone: int = 0) -> Device:
     pad_size = (100, 100)
 
     # create alignment marks
-    align = alignment_mark(layers=[l.gds_layer for k, l in ls._layers.items()])
-    ALIGN = Device("ALIGN")
-    ## positive/negative tone
-    align_footprint = pg.rectangle((align.ysize / 2 + 10, align.ysize / 2 + 10))
-    align_area = Device()
-    for i in range(2):
-        for j in range(2):
-            if (i == j) and (i == 0):
-                continue
-            aa = align_area << align_footprint
-            aa.move(-aa.center)
-            aa.move((aa.xsize / 2 * (-1) ** i, aa.ysize / 2 * (-1) ** j))
-    ALIGN << positivetoneify(align, align_area, ls)
-    # for k, l in ls._layers.items():
-    #    # only do gate if L_gate is nonzero
-    #    if l.gds_layer % 2 == 0:
-    #        align_layer = Device()
-    #        for p in align.get_polygons(by_spec=(l.gds_layer, 0)):
-    #            align_layer.add_polygon(p, layer=l.gds_layer)
-    #        al = ALIGN << pg.kl_boolean(
-    #            A=align_area, B=align_layer, operation="not", layer=l.gds_layer
-    #        )
-    #    else:
-    #        al = ALIGN << align
-    # source and drain on sourcedrain
-    # if layer_set["sourcedrain"].gds_layer % 2 == 0:
-    #    source = TRANSISTOR << pg.kl_boolean(
-    #        A=dev_area, B=source, operation="not", layer=layer_set["sourcedrain"].gds_layer
-    #    )
-    #    drain = TRANSISTOR << pg.kl_boolean(
-    #        A=dev_area, B=drain, operation="not", layer=layer_set["sourcedrain"].gds_layer
-    #    )
-    # else:
-    #    source = TRANSISTOR << source
-    #    drain = TRANSISTOR << drain
-    ## mesa
-    # if layer_set["mesa"].gds_layer % 2 == 0:
-    #    mesa = TRANSISTOR << pg.kl_boolean(
-    #        A=dev_area, B=mesa, operation="not", layer=layer_set["mesa"].gds_layer
-    #    )
-    # else:
-    #    mesa = TRANSISTOR << mesa
-    # pg.kl_boolean
+    align = alignment_mark_positivetone(ls)
     alignment_offset = 700
     resolutions = [1, 2, 3, 5]
     rotate_i = lambda dev, i: dev.rotate(i * 90 if i // 2 == 0 else -i * 90 + 90)
     x_offset = alignment_offset
     y_offset = alignment_offset
     for i in range(4):
-        alignment_marks = TOP << ALIGN
+        alignment_marks = TOP << align
         rotate_i(alignment_marks, i)
         alignment_marks.move((x_offset, y_offset))
         if i % 2 == 0:
@@ -495,86 +381,26 @@ def test_chip(neg_tone: int = 0) -> Device:
     )
     trans = TOP << TRANSISTOR
     trans.move((sample_w / 2 - trans.x, litho.ymax + 50 - trans.ymin))
-    # x_offset = array_margin
-    # y_offset = array_margin
-    # for L_ov in L_overlap:
-    #    for W_c in W_contact:
-    #        for L_g in L_gate:
-    #            dut = transistor(
-    #                L_mesa=L_ov * 2 + L_g + 2,
-    #                L_gate=L_g,
-    #                L_overlap=L_ov,
-    #                W_mesa=2 + W_c,
-    #                W_contact=W_c,
-    #                layer_set=ls,
-    #                pad_size=pad_size,
-    #            )
-    #            if x_offset + pitch > array_w - array_margin:
-    #                x_offset = array_margin
-    #                y_offset += pitch
-    #            dut_inst = TRANSISTOR_ARRAY << dut
-    #            dut_inst.move((x_offset - dut_inst.xmin, y_offset - dut_inst.ymin))
-    #            x_offset += pitch
 
-    ## create resistors
-    # x_offset = array_margin
-    # y_offset = array_margin
-    # for L in L_resistor:
-    #    for W in W_resistor:
-    #        dut = transistor(
-    #            L_mesa=L + 20,
-    #            L_gate=0,
-    #            L_overlap=10,
-    #            W_mesa=2 + W,
-    #            W_contact=W,
-    #            layer_set=ls,
-    #            pad_size=pad_size,
-    #        )
-    #        if x_offset + pitch > array_w - array_margin:
-    #            x_offset = array_margin
-    #            y_offset += pitch
-    #        dut_inst = RESISTOR_ARRAY << dut
-    #        dut_inst.move((x_offset - dut_inst.xmin, y_offset - dut_inst.ymin))
-    #        x_offset += pitch
-
-    ## create mimcaps
-    # x_offset = array_margin
-    # y_offset = array_margin
-    # pitch = 4.5 * pad_size[0]
-    # for L_ov in L_mim:
-    #    dut = mim_cap(L_overlap=L_ov, layer_set=ls, pad_size=pad_size)
-    #    if x_offset + pitch > array_w - array_margin:
-    #        x_offset = array_margin
-    #        y_offset += pitch
-    #    dut_inst = MIM_CAP_ARRAY << dut
-    #    dut_inst.move((x_offset - dut_inst.xmin, y_offset - dut_inst.ymin))
-    #    x_offset += pitch
-
-    ## add transistors and resistors
-    # dut_offset = 1200
-    # x_offset = dut_offset
-    # y_offset = dut_offset
-    # for i in range(4):
-    #    t_array = TOP << TRANSISTOR_ARRAY
-    #    r_array = TOP << RESISTOR_ARRAY
-    #    t_array.move((x_offset - t_array.xmin, y_offset - t_array.ymin))
-    #    r_array.move((x_offset - r_array.xmin, y_offset - r_array.ymin))
-    #    if i // 2 == 0:
-    #        r_array.movey(150 + t_array.ymax - r_array.ymin)
-    #    else:
-    #        r_array.movey(-150 + t_array.ymin - r_array.ymax)
-    #    if i % 2 == 0:
-    #        x_offset = sample_w - dut_offset - t_array.xsize
-    #    else:
-    #        x_offset = dut_offset
-    #        y_offset = sample_w - dut_offset - t_array.ysize
-    ## add mimcaps
-    # x_offset = dut_offset
-    # y_offset = sample_w / 2
-    # for i in range(2):
-    #    m_array = TOP << MIM_CAP_ARRAY
-    #    m_array.move((x_offset - m_array.xmin, y_offset - m_array.y))
-    #    x_offset = sample_w - dut_offset - m_array.xsize
+    # create ITO resistors
+    RESISTOR = pg.gridsweep(
+        function=lambda L, W: transistor(
+            L_mesa=L + 20,
+            L_gate=0,
+            L_overlap=10,
+            W_mesa=2 + W,
+            W_contact=W,
+            layer_set=ls,
+            pad_size=pad_size,
+        ),
+        param_y={"L": L_resistor},
+        param_x={"W": W_resistor},
+        spacing=(50, 50),
+        separation=True,
+        label_layer=None,
+    )
+    res = TOP << RESISTOR
+    res.move((sample_w / 2 - res.x, trans.ymax + 50 - res.ymin))
     return TOP
 
 
