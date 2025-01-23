@@ -10,6 +10,76 @@ from typing import Tuple, List
 set_quickplot_options(blocking=True)
 
 
+def mos_cap(
+    L_overlap: float = 100,
+    L_contact: float = 10,
+    layer_set: LayerSet = LayerSet(),
+    pad_size: Tuple[float, float] = (100, 100),
+) -> Device:
+    """Creates a MOS capacitor between W1 and MESA, with contact on W2.
+
+    Parameters:
+        L_overlap (float): overlap between W1 and MESA
+        L_contact (float): overlap (contact) between W2 and MESA
+        layer_set (LayerSet): layers
+        pad_size (tuple(float,float)): pad length and width
+
+    Returns:
+        Device: the created MOS capacitor
+    """
+    LAYOUT = Device(f"dummy")
+    MOS = Device(f"MOS_CAP({L_overlap},{L_contact},{pad_size[1]})")
+    bot_pad = pg.rectangle(
+        (pad_size[0] + L_overlap, pad_size[1]), layer=layer_set["W1"].gds_layer
+    )
+    mesa = pg.rectangle(
+        (L_overlap + L_contact, pad_size[1]), layer=layer_set["MESA"].gds_layer
+    )
+    top_pad = pg.rectangle(
+        (pad_size[0] + L_contact, pad_size[1]), layer=layer_set["W2"].gds_layer
+    )
+    b = LAYOUT << bot_pad
+    t = LAYOUT << top_pad
+    m = LAYOUT << mesa
+    b.move((-b.xmin, -b.ymin))
+    m.move((pad_size[0] - m.xmin, -m.ymin))
+    t.move((pad_size[0] + L_overlap - t.xmin, -t.ymin))
+    text = LAYOUT << pg.text(
+        f"W/L\n{pad_size[1]}/{L_overlap}", layer=layer_set["W1"].gds_layer
+    )
+    text.move((0.5 * (b.x + t.x) - text.x, t.ymax + 10 - text.ymin))
+
+    dev_area = pg.rectangle((LAYOUT.xsize + 10, LAYOUT.ysize + 10))
+    dev_area.move((LAYOUT.x - dev_area.x, LAYOUT.y - dev_area.y))
+    bot_u = pg.union(b, layer=layer_set["W1"].gds_layer)
+    top_u = pg.union(t, layer=layer_set["W2"].gds_layer)
+    mesa_u = pg.union(m, layer=layer_set["MESA"].gds_layer)
+    text_u = pg.union(text, layer=layer_set["W1"].gds_layer)
+    if layer_set["W1"].gds_layer % 2 == 0:
+        MOS << pg.kl_boolean(
+            A=dev_area, B=bot_u, operation="not", layer=layer_set["W1"].gds_layer
+        )
+        MOS << pg.kl_boolean(
+            A=dev_area, B=text_u, operation="not", layer=layer_set["W1"].gds_layer
+        )
+    else:
+        MOS << bot_u
+        MOS << text_u
+    if layer_set["W2"].gds_layer % 2 == 0:
+        MOS << pg.kl_boolean(
+            A=dev_area, B=top_u, operation="not", layer=layer_set["W2"].gds_layer
+        )
+    else:
+        MOS << top_u
+    if layer_set["MESA"].gds_layer % 2 == 0:
+        MOS << pg.kl_boolean(
+            A=dev_area, B=mesa_u, operation="not", layer=layer_set["MESA"].gds_layer
+        )
+    else:
+        MOS << mesa_u
+    return MOS
+
+
 def mim_cap(
     L_overlap: float = 100,
     layer_set: LayerSet = LayerSet(),
