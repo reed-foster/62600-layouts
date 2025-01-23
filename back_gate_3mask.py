@@ -3,7 +3,12 @@ from phidl import Device, LayerSet
 from phidl import quickplot as qp
 from phidl import set_quickplot_options
 
-from qnngds.tests import alignment_mark, resolution_test
+from qnngds.tests import alignment_mark, resolution_test, vdp
+from qnngds.devices.resistor import meander
+
+import phidlfem.analysis as pfa
+
+import numpy as np
 
 from typing import Tuple, List
 
@@ -220,9 +225,8 @@ def alignment_mark_positivetone(layer_set: LayerSet = LayerSet()) -> Device:
     Returns:
         Device: alignment markers
     """
-    align = alignment_mark(layers=[l.gds_layer for k, l in layer_set._layers.items()])
     ALIGN = Device("ALIGN")
-    ## positive/negative tone
+    align = alignment_mark(layers=[l.gds_layer for k, l in layer_set._layers.items()])
     align_footprint = pg.rectangle((align.ysize / 2 + 10, align.ysize / 2 + 10))
     align_area = Device()
     for i in range(2):
@@ -237,6 +241,116 @@ def alignment_mark_positivetone(layer_set: LayerSet = LayerSet()) -> Device:
     )
     numbers.move((align_area.xmin - numbers.xmax, align_area.ymin - numbers.ymin))
     return positivetoneify(align, align_area, layer_set)
+
+
+def gated_vdp(
+    gated: bool = True,
+    rotation: float = 0,
+    pad_size: Tuple[float, float] = (100, 100),
+    layer_set: LayerSet = LayerSet(),
+) -> Device:
+    """Creates Van-der-Pauw test structure, with optional back gate.
+
+    Parameters:
+        gated (bool): if true, include back gate
+        rotation (float): rotation of test structure in degrees
+        pad_size (tuple(float,float)): pad length and width
+        layer_set (LayerSet): layer set to generate alignment marks for
+
+    Returns:
+        Device: VDP structure
+    """
+    VDP = Device(f"VDP({gated})")
+    ito = VDP << vdp(l=2 * max(pad_size), w=10, layer=layer_set["mesa"].gds_layer)
+    pad = pg.rectangle(pad_size, layer=layer_set["sourcedrain"].gds_layer)
+    pad.move((-pad.xmin, -pad.y))
+    contact = pad << pg.rectangle((20, 10), layer=layer_set["sourcedrain"].gds_layer)
+    contact.move((-contact.xmax, -contact.y))
+    pad.add_port(
+        name=1, midpoint=(contact.xmin + 5, contact.y), orientation=180, width=10
+    )
+    pads = {}
+    for p in ito.ports:
+        pad_i = VDP << pad
+        pad_i.connect(pad_i.ports[1], ito.ports[p])
+        pads[p] = pad_i
+    if gated:
+        gate = VDP << vdp(
+            l=2 * max(pad_size) + 10, w=15, layer=layer_set["gate"].gds_layer
+        )
+        gate.move(ito.center - gate.center)
+        gate_pad = VDP << pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
+        gate_pad.move(
+            (pads["E1"].xmax - gate_pad.xmax, pads["S1"].ymin - gate_pad.ymin)
+        )
+        gate_contact = VDP << pg.rectangle(
+            ((VDP.xsize - max(pad_size)) / 2**0.5, 10),
+            layer=layer_set["gate"].gds_layer,
+        )
+        gate_contact.rotate(-45)
+        gate_contact.move(
+            (gate_pad.x - gate_contact.xmax, gate_pad.y - gate_contact.ymin)
+        )
+    VDP.rotate(rotation)
+    area = pg.rectangle(VDP.size + (10, 10))
+    area.move(VDP.center - area.center)
+    return positivetoneify(VDP, area, layer_set)
+
+
+def metal_resistor(
+    width: float = 5,
+    squares: float = 50,
+    layer_name: str = "gate",
+    pad_size: Tuple[float, float] = (100, 100),
+    layer_set: LayerSet = LayerSet(),
+) -> Device:
+    """Creates meandered metal resistor.
+
+    Parameters:
+        width (float): wire width in microns
+        squares (float): number of squares
+        pad_size (tuple(float,float)): pad length and width
+        layer_set (LayerSet): layer set to generate alignment marks for
+
+    Returns:
+        Device: VDP structure
+    """
+    pitch = 2 * width
+    max_length = np.ceil(squares / (pad_size[1] / width)) * pitch
+    RESISTOR = Device(f"RESISTOR({width, squares})")
+    m = meander(
+        width=width,
+        pitch=pitch,
+        squares=squares,
+        max_length=max_length,
+        layer=layer_set[layer_name].gds_layer,
+    )
+    RESISTOR << m
+    contact = pg.rectangle(pad_size, layer=layer_set[layer_name].gds_layer)
+    contact.add_port(
+        name=1, midpoint=(contact.xmin, contact.y), width=pad_size[1], orientation=180
+    )
+    for i in range(2):
+        contact_i = RESISTOR << contact
+        contact_i.connect(contact_i.ports[1], m.ports[i + 1])
+    dummy = pg.union(RESISTOR, by_layer=True)
+    dummy.add_port(
+        name=1, midpoint=(RESISTOR.x, RESISTOR.ymin), width=pad_size[1], orientation=270
+    )
+    dummy.add_port(
+        name=2, midpoint=(RESISTOR.x, RESISTOR.ymax), width=pad_size[1], orientation=90
+    )
+    sq_actual = 0.5 * (pfa.get_squares(dummy, 2)[1] + pfa.get_squares(m, 2)[1])
+    RESISTOR.rotate(90)
+    text = pg.text(
+        f"W/sq\n{width}/{round(sq_actual)}", layer=layer_set[layer_name].gds_layer
+    )
+    # align to drain / mesa
+    text.move((RESISTOR.xmin + pad_size[1] / 2 - text.x, RESISTOR.ymax - text.ymin + 5))
+    RESISTOR << text
+    area = pg.rectangle(RESISTOR.size + (10, 10))
+    area.move(RESISTOR.center - area.center)
+    return positivetoneify(RESISTOR, area, layer_set)
 
 
 def test_chip(neg_tone: int = 0) -> Device:
@@ -256,6 +370,7 @@ def test_chip(neg_tone: int = 0) -> Device:
     W_resistor = [10, 20, 50, 100]
 
     # W resistors
+    SQ_resistor = [100, 500, 1000]
 
     # positive tone for even GDS layers, negative tone for odd GDS layers
     ls = LayerSet()
@@ -359,7 +474,7 @@ def test_chip(neg_tone: int = 0) -> Device:
     )
     mos = TOP << MOS
     mim = TOP << MIM
-    mos.move((litho.xmax - mos.xmin + 50, litho.ymin - mos.ymin))
+    mos.move((litho.xmax - mos.xmin + 50, -mos.ymin))
     mim.move((litho.xmax - mim.xmin + 50, mos.ymax - mim.ymin + 50))
 
     # create transistors
@@ -399,8 +514,53 @@ def test_chip(neg_tone: int = 0) -> Device:
         separation=True,
         label_layer=None,
     )
-    res = TOP << RESISTOR
-    res.move((sample_w / 2 - res.x, trans.ymax + 50 - res.ymin))
+    ito_res = TOP << RESISTOR
+    ito_res.move((sample_w / 2 - ito_res.x, trans.ymax + 50 - ito_res.ymin))
+
+    # create VDP structuito_res
+    for i in range(2):
+        for j in range(2):
+            for k in range(2):
+                if (j == k) and (j == 1):
+                    continue
+                vdp = gated_vdp(
+                    gated=i,
+                    rotation=45 if j == k else 0,
+                    pad_size=pad_size,
+                    layer_set=ls,
+                )
+                vdp_i = TOP << vdp
+                x0 = (
+                    (ito_res.xmin - vdp_i.xmax - 50)
+                    if i == 1
+                    else (ito_res.xmax - vdp_i.xmin + 50)
+                )
+                xshift = 100 if i == 1 else 0
+                vdp_i.move(
+                    (
+                        x0 + ((-1) ** i) * (vdp_i.xsize + xshift) * j,
+                        trans.ymax + 50 - vdp_i.ymin + (vdp_i.ysize + 10) * k,
+                    )
+                )
+
+    # create W resistors
+    W_RESISTOR = pg.gridsweep(
+        function=lambda sq, layer_name: metal_resistor(
+            width=5,
+            squares=sq,
+            layer_name=layer_name,
+            layer_set=ls,
+            pad_size=pad_size,
+        ),
+        param_y={},
+        param_x={"sq": SQ_resistor, "layer_name": ("gate", "sourcedrain")},
+        spacing=(50, 50),
+        separation=True,
+        label_layer=None,
+    )
+    w_res = TOP << W_RESISTOR
+    w_res.move((litho.xmax - w_res.xmin, mim.ymax - w_res.ymin + 50))
+
     return TOP
 
 
