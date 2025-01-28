@@ -4,4 +4,7 @@
 *.txt
 *.pdf
 *.svg
+*.png
+*.jpeg
+*.jpg
 .phidlfem_D_hashes.json

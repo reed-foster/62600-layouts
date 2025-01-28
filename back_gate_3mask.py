@@ -517,7 +517,7 @@ def test_chip(neg_tone: int = 0) -> Device:
     ito_res = TOP << RESISTOR
     ito_res.move((sample_w / 2 - ito_res.x, trans.ymax + 50 - ito_res.ymin))
 
-    # create VDP structuito_res
+    # create VDP structures
     for i in range(2):
         for j in range(2):
             for k in range(2):
