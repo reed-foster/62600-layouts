@@ -358,8 +358,8 @@ def test_chip(neg_tone: int = 0) -> Device:
 
     # transistors
     L_gate = [2, 3, 5, 7, 10, 15, 25]
-    L_overlap = [2, 3, 5, 10]
-    W_contact = [5, 10, 30, 100]
+    L_overlap = [2, 5, 10]
+    W_contact = [5, 10, 30, 50, 100]
 
     # MIM/MOS capacitors
     L_cap = [20, 40, 80, 100, 200]
@@ -480,10 +480,10 @@ def test_chip(neg_tone: int = 0) -> Device:
     # create transistors
     TRANSISTOR = pg.gridsweep(
         function=lambda L_ov, W_c, L_g: transistor(
-            L_mesa=L_ov * 2 + L_g + 2,
+            L_mesa=L_ov * 2 + L_g + 4,
             L_gate=L_g,
             L_overlap=L_ov,
-            W_mesa=2 + W_c,
+            W_mesa=4 + W_c,
             W_contact=W_c,
             layer_set=ls,
             pad_size=pad_size,
@@ -495,7 +495,7 @@ def test_chip(neg_tone: int = 0) -> Device:
         label_layer=None,
     )
     trans = TOP << TRANSISTOR
-    trans.move((sample_w / 2 - trans.x, litho.ymax + 50 - trans.ymin))
+    trans.move((sample_w / 2 - trans.x, litho.ymax + 30 - trans.ymin))
 
     # create ITO resistors
     RESISTOR = pg.gridsweep(
@@ -564,9 +564,40 @@ def test_chip(neg_tone: int = 0) -> Device:
     return TOP
 
 
+def alignment():
+    X = pg.cross(length=100, width=2, layer=0)
+    R = pg.rectangle(size=(110, 110), layer=0)
+    R.move(-R.center)
+    D = Device("alignment")
+    D << pg.kl_boolean(A=R, B=X, operation="not", layer=0)
+    for l in (2, 4):
+        r = D << pg.rectangle(size=(110, 110), layer=l)
+        r.move(-r.center)
+    return D
+
+
 if __name__ == "__main__":
     T = test_chip(neg_tone=0)
-    T.write_gds(
+    # array
+    A = Device("array")
+    for i in range(8):
+        for j in range(8):
+            ij = A << T
+            ij.move(-ij.center)
+            ij.move((5000 * i, 5000 * j))
+            label = A << pg.text(
+                text=chr(0x41 + (7 - j)) + str(i + 1), size=200, layer=0
+            )
+            label.move((ij.xmin - label.xmin, ij.ymin - label.ymin))
+            label.move((3765, 925))
+    A.move(-A.center)
+    X = alignment()
+    for i in range(2):
+        for j in range(2):
+            x = A << X
+            x.move((20200 * (-1) ** i, 20200 * (-1) ** j))
+    # qp(A)
+    A.write_gds(
         "ito_test.gds",
         unit=1e-6,
         precision=1e-9,
