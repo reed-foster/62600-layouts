@@ -64,7 +64,9 @@ def mos_cap(
     MOS = Device(f"MOS_CAP({L_overlap},{L_contact},{pad_size[1]})")
     bot_pad = pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
     bot_pad.move((-bot_pad.xmin, -bot_pad.ymin))
-    bot = bot_pad << pg.rectangle((L_overlap, W), layer=layer_set["gate"].gds_layer)
+    bot = bot_pad << pg.rectangle(
+        (L_overlap, W + 10), layer=layer_set["gate"].gds_layer
+    )
     bot.move((pad_size[0] - bot.xmin, pad_size[1] / 2 - bot.y))
     mesa = pg.rectangle((L_overlap + L_contact, W), layer=layer_set["mesa"].gds_layer)
     top_pad = pg.rectangle(
@@ -75,10 +77,8 @@ def mos_cap(
     m = MOS << mesa
     b.move((-b.xmin, -b.ymin))
     m.move((pad_size[0] - m.xmin, b.y - m.y))
-    t.move((pad_size[0] + L_overlap - t.xmin, b.y - t.y))
-    text = MOS << pg.text(
-        f"W/L\n{pad_size[1]}/{L_overlap}", layer=layer_set["gate"].gds_layer
-    )
+    t.move((pad_size[0] + L_overlap + 5 - t.xmin, b.y - t.y))
+    text = MOS << pg.text(f"W/L\n{W}/{L_overlap}", layer=layer_set["gate"].gds_layer)
     text.move((t.x - text.x, t.ymax + 10 - text.ymin))
 
     dev_area = pg.rectangle((MOS.xsize + 10, MOS.ysize + 10))
@@ -106,7 +106,9 @@ def mim_cap(
     MIM = Device(f"MIM_CAP({L_overlap},{pad_size[1]})")
     bot_pad = pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
     bot_pad.move((-bot_pad.xmin, -bot_pad.ymin))
-    bot = bot_pad << pg.rectangle((L_overlap, W), layer=layer_set["gate"].gds_layer)
+    bot = bot_pad << pg.rectangle(
+        (L_overlap, W + 10), layer=layer_set["gate"].gds_layer
+    )
     bot.move((pad_size[0] - bot.xmin, pad_size[1] / 2 - bot.y))
     top_pad = pg.rectangle(pad_size, layer=layer_set["sourcedrain"].gds_layer)
     top_pad.move((-top_pad.xmin, -top_pad.ymin))
@@ -117,10 +119,8 @@ def mim_cap(
     b = MIM << bot_pad
     t = MIM << top_pad
     b.move((-b.xmin, -b.ymin))
-    t.move((pad_size[0] - t.xmin, b.y - t.y))
-    text = MIM << pg.text(
-        f"W/L\n{pad_size[1]}/{L_overlap}", layer=layer_set["gate"].gds_layer
-    )
+    t.move((pad_size[0] + 5 - t.xmin, b.y - t.y))
+    text = MIM << pg.text(f"W/L\n{W}/{L_overlap}", layer=layer_set["gate"].gds_layer)
     text.move(
         (t.xmax - pad_size[0] / 2 - text.x, t.y + pad_size[1] / 2 + 10 - text.ymin)
     )
@@ -362,8 +362,8 @@ def test_chip(neg_tone: int = 0) -> Device:
     W_contact = [5, 10, 30, 50, 100]
 
     # MIM/MOS capacitors
-    L_cap = [20, 40, 80, 100, 200]
-    W_cap = [50, 70, 80, 100]
+    L_cap = [10, 20, 50, 100, 200]
+    W_cap = [10, 20, 50, 100]
 
     # ITO resistors
     L_resistor = [2, 3, 5, 10, 15, 25]
