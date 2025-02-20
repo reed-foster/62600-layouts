@@ -584,7 +584,7 @@ if __name__ == "__main__":
         for j in range(8):
             ij = A << T
             ij.move(-ij.center)
-            ij.move((5000 * i, 5000 * j))
+            ij.move((7000 * i, 7000 * j))
             label = A << pg.text(
                 text=chr(0x41 + (7 - j)) + str(i + 1), size=200, layer=0
             )
@@ -595,7 +595,7 @@ if __name__ == "__main__":
     for i in range(2):
         for j in range(2):
             x = A << X
-            x.move((20200 * (-1) ** i, 20200 * (-1) ** j))
+            x.move((27200 * (-1) ** i, 27200 * (-1) ** j))
     # qp(A)
     A.write_gds(
         "ito_test.gds",
