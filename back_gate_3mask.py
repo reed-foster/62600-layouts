@@ -15,32 +15,6 @@ from typing import Tuple, List
 set_quickplot_options(blocking=True)
 
 
-def positivetoneify(
-    D: Device = None, cutout: Device = None, layer_set: LayerSet = LayerSet()
-) -> Device:
-    """Inverts device D over area specified by cutout.
-
-    Parameters:
-        D (Device): negative tone version of device
-        cutout (Device): area to apply inversion (can just be the bounding box of D + extent, or can be irregular shape)
-        layer_set (LayerSet): GDS layers
-
-    Returns:
-        Device: positive tone version
-    """
-    POS = Device(D.name)
-    for k, l in layer_set._layers.items():
-        # only do gate if L_gate is nonzero
-        if l.gds_layer % 2 == 0:
-            layer = Device()
-            for p in D.get_polygons(by_spec=(l.gds_layer, l.gds_datatype)):
-                layer.add_polygon(p, layer=l.gds_layer)
-            POS << pg.kl_boolean(A=cutout, B=layer, operation="not", layer=l.gds_layer)
-        else:
-            POS << D
-    return POS
-
-
 def mos_cap(
     L_overlap: float = 100,
     L_contact: float = 10,
@@ -65,25 +39,31 @@ def mos_cap(
     bot_pad = pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
     bot_pad.move((-bot_pad.xmin, -bot_pad.ymin))
     bot = bot_pad << pg.rectangle(
-        (L_overlap, W + 10), layer=layer_set["gate"].gds_layer
+        (L_overlap + 15, W + 10), layer=layer_set["gate"].gds_layer
     )
-    bot.move((pad_size[0] - bot.xmin, pad_size[1] / 2 - bot.y))
+    bot.move((pad_size[0] - bot.xmin - 5, pad_size[1] / 2 - bot.y))
+    bot_via = bot_pad << pg.rectangle(
+        (pad_size[0] + 5, pad_size[1] + 5), layer=layer_set["via"].gds_layer
+    )
+    bot_via.move((pad_size[0] / 2 - bot_via.x, pad_size[1] / 2 - bot_via.y))
     mesa = pg.rectangle((L_overlap + L_contact, W), layer=layer_set["mesa"].gds_layer)
     top_pad = pg.rectangle(
         (pad_size[0] + L_contact, pad_size[1]), layer=layer_set["sourcedrain"].gds_layer
     )
+    top = top_pad << pg.rectangle(
+        (10, W + 10), layer=layer_set["sourcedrain"].gds_layer
+    )
+    top.move((-top.xmin, pad_size[1] / 2 - top.y))
     b = MOS << bot_pad
     t = MOS << top_pad
     m = MOS << mesa
     b.move((-b.xmin, -b.ymin))
-    m.move((pad_size[0] - m.xmin, b.y - m.y))
-    t.move((pad_size[0] + L_overlap + 5 - t.xmin, b.y - t.y))
+    m.move((b.xmax - m.xmin - L_overlap, b.y - m.y))
+    t.move((m.xmax - t.xmin - 5, b.y - t.y))
     text = MOS << pg.text(f"W/L\n{W}/{L_overlap}", layer=layer_set["gate"].gds_layer)
     text.move((t.x - text.x, t.ymax + 10 - text.ymin))
 
-    dev_area = pg.rectangle((MOS.xsize + 10, MOS.ysize + 10))
-    dev_area.move((MOS.x - dev_area.x, MOS.y - dev_area.y))
-    return positivetoneify(MOS, dev_area, layer_set)
+    return MOS
 
 
 def mim_cap(
@@ -107,27 +87,29 @@ def mim_cap(
     bot_pad = pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
     bot_pad.move((-bot_pad.xmin, -bot_pad.ymin))
     bot = bot_pad << pg.rectangle(
-        (L_overlap, W + 10), layer=layer_set["gate"].gds_layer
+        (L_overlap + 10, W + 10), layer=layer_set["gate"].gds_layer
     )
     bot.move((pad_size[0] - bot.xmin, pad_size[1] / 2 - bot.y))
+    bot_via = bot_pad << pg.rectangle(
+        (pad_size[0] + 5, pad_size[1] + 5), layer=layer_set["via"].gds_layer
+    )
+    bot_via.move((pad_size[0] / 2 - bot_via.x, pad_size[1] / 2 - bot_via.y))
     top_pad = pg.rectangle(pad_size, layer=layer_set["sourcedrain"].gds_layer)
     top_pad.move((-top_pad.xmin, -top_pad.ymin))
     top = top_pad << pg.rectangle(
-        (L_overlap, W), layer=layer_set["sourcedrain"].gds_layer
+        (L_overlap + 10, W), layer=layer_set["sourcedrain"].gds_layer
     )
     top.move((-top.xmax, pad_size[1] / 2 - top.y))
     b = MIM << bot_pad
     t = MIM << top_pad
     b.move((-b.xmin, -b.ymin))
-    t.move((pad_size[0] + 5 - t.xmin, b.y - t.y))
+    t.move((b.xmax - t.xmin - L_overlap, b.y - t.y))
     text = MIM << pg.text(f"W/L\n{W}/{L_overlap}", layer=layer_set["gate"].gds_layer)
     text.move(
         (t.xmax - pad_size[0] / 2 - text.x, t.y + pad_size[1] / 2 + 10 - text.ymin)
     )
 
-    dev_area = pg.rectangle((MIM.xsize + 10, MIM.ysize + 10))
-    dev_area.move((MIM.x - dev_area.x, MIM.y - dev_area.y))
-    return positivetoneify(MIM, dev_area, layer_set)
+    return MIM
 
 
 def transistor(
@@ -162,10 +144,11 @@ def transistor(
     mesa = pg.rectangle((L_mesa, W_mesa), layer=layer_set["mesa"].gds_layer)
     if L_gate != 0:
         gate = pg.rectangle(
-            (L_gate + 2 * L_overlap, W_mesa + 10), layer=layer_set["gate"].gds_layer
+            (L_gate + 2 * L_overlap, W_mesa + 20), layer=layer_set["gate"].gds_layer
         )
     else:
-        gate = pg.rectangle((L_mesa, W_mesa + 10), layer=layer_set["gate"].gds_layer)
+        # dummy device that is used as a reference point/location
+        gate = pg.rectangle((L_mesa, W_mesa + 20), layer=layer_set["gate"].gds_layer)
     source = pg.rectangle(
         ((L_mesa - L_gate) / 2 + 5, W_contact), layer=layer_set["sourcedrain"].gds_layer
     )
@@ -184,20 +167,25 @@ def transistor(
 
     # add pads
     gate_pad = pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
+    gate_via = pg.rectangle(
+        (pad_size[0] + 5, pad_size[1] + 5), layer=layer_set["via"].gds_layer
+    )
     source_pad = pg.rectangle(pad_size, layer=layer_set["sourcedrain"].gds_layer)
     drain_pad = pg.rectangle(pad_size, layer=layer_set["sourcedrain"].gds_layer)
     gate_pad.move((gate.xmax - gate_pad.xmax, gate.ymax - gate_pad.ymin))
+    gate_via.move(gate_pad.center - gate_via.center)
     source_pad.move((source.xmin - source_pad.xmax, source.ymax - source_pad.ymax))
     drain_pad.move((drain.xmax - drain_pad.xmin, drain.ymax - drain_pad.ymax))
     if L_gate != 0:
         TRANSISTOR << gate_pad
+        TRANSISTOR << gate_via
     TRANSISTOR << source_pad
     TRANSISTOR << drain_pad
 
     # add text
     if L_gate != 0:
         text = pg.text(
-            f"W/Lg/Lov\n{W_contact}/{L_gate}/{L_overlap}",
+            f"W/Lg/Lov\n{W_mesa}/{L_gate}/{L_overlap}",
             layer=layer_set["gate"].gds_layer,
         )
         # align to upper right corner
@@ -205,42 +193,13 @@ def transistor(
         TRANSISTOR << text
     else:
         text = pg.text(
-            f"W/L\n{W_contact}/{L_mesa-2*L_overlap}", layer=layer_set["gate"].gds_layer
+            f"W/L\n{W_mesa}/{L_mesa-2*L_overlap}", layer=layer_set["gate"].gds_layer
         )
         # align to drain / mesa
         text.move((mesa.x - text.x, drain_pad.ymax - text.ymin + 10))
         TRANSISTOR << text
 
-    dev_area = pg.rectangle((TRANSISTOR.xsize + 10, TRANSISTOR.ysize + 10))
-    dev_area.move((TRANSISTOR.x - dev_area.x, TRANSISTOR.y - dev_area.y))
-    return positivetoneify(TRANSISTOR, dev_area, layer_set)
-
-
-def alignment_mark_positivetone(layer_set: LayerSet = LayerSet()) -> Device:
-    """Creates alignment marks and converts to positive tone.
-
-    Parameters:
-        layer_set (LayerSet): layer set to generate alignment marks for
-
-    Returns:
-        Device: alignment markers
-    """
-    ALIGN = Device("ALIGN")
-    align = alignment_mark(layers=[l.gds_layer for k, l in layer_set._layers.items()])
-    align_footprint = pg.rectangle((align.ysize / 2 + 10, align.ysize / 2 + 10))
-    align_area = Device()
-    for i in range(2):
-        for j in range(2):
-            if (i == j) and (i == 0):
-                continue
-            aa = align_area << align_footprint
-            aa.move(-aa.center)
-            aa.move((aa.xsize / 2 * (-1) ** i, aa.ysize / 2 * (-1) ** j))
-    numbers = align_area << pg.rectangle(
-        (align_area.xmin - align.xmin, align_area.ysize)
-    )
-    numbers.move((align_area.xmin - numbers.xmax, align_area.ymin - numbers.ymin))
-    return positivetoneify(align, align_area, layer_set)
+    return TRANSISTOR
 
 
 def gated_vdp(
@@ -283,6 +242,10 @@ def gated_vdp(
         gate_pad.move(
             (pads["E1"].xmax - gate_pad.xmax, pads["S1"].ymin - gate_pad.ymin)
         )
+        via = VDP << pg.rectangle(
+            (pad_size[0] + 5, pad_size[1] + 5), layer=layer_set["via"].gds_layer
+        )
+        via.move(gate_pad.center - via.center)
         gate_contact = VDP << pg.rectangle(
             ((VDP.xsize - max(pad_size)) / 2**0.5, 10),
             layer=layer_set["gate"].gds_layer,
@@ -292,9 +255,7 @@ def gated_vdp(
             (gate_pad.x - gate_contact.xmax, gate_pad.y - gate_contact.ymin)
         )
     VDP.rotate(rotation)
-    area = pg.rectangle(VDP.size + (10, 10))
-    area.move(VDP.center - area.center)
-    return positivetoneify(VDP, area, layer_set)
+    return VDP
 
 
 def metal_resistor(
@@ -309,11 +270,12 @@ def metal_resistor(
     Parameters:
         width (float): wire width in microns
         squares (float): number of squares
+        layer_name (string): name of layer to define resistor on
         pad_size (tuple(float,float)): pad length and width
         layer_set (LayerSet): layer set to generate alignment marks for
 
     Returns:
-        Device: VDP structure
+        Device: meandered metal resistor
     """
     pitch = 2 * width
     max_length = np.ceil(squares / (pad_size[1] / width)) * pitch
@@ -330,9 +292,17 @@ def metal_resistor(
     contact.add_port(
         name=1, midpoint=(contact.xmin, contact.y), width=pad_size[1], orientation=180
     )
+    # add vias
+    VIAS = Device("vias")
+    via = pg.rectangle(
+        (pad_size[0] + 5, pad_size[1] + 5), layer=layer_set["via"].gds_layer
+    )
     for i in range(2):
         contact_i = RESISTOR << contact
         contact_i.connect(contact_i.ports[1], m.ports[i + 1])
+        if layer_name == "gate":
+            via_i = VIAS << via
+            via_i.move(contact_i.center - via_i.center)
     dummy = pg.union(RESISTOR, by_layer=True)
     dummy.add_port(
         name=1, midpoint=(RESISTOR.x, RESISTOR.ymin), width=pad_size[1], orientation=270
@@ -341,6 +311,7 @@ def metal_resistor(
         name=2, midpoint=(RESISTOR.x, RESISTOR.ymax), width=pad_size[1], orientation=90
     )
     sq_actual = 0.5 * (pfa.get_squares(dummy, 2)[1] + pfa.get_squares(m, 2)[1])
+    RESISTOR << VIAS
     RESISTOR.rotate(90)
     text = pg.text(
         f"W/sq\n{width}/{round(sq_actual)}", layer=layer_set[layer_name].gds_layer
@@ -348,49 +319,131 @@ def metal_resistor(
     # align to drain / mesa
     text.move((RESISTOR.xmin + pad_size[1] / 2 - text.x, RESISTOR.ymax - text.ymin + 5))
     RESISTOR << text
-    area = pg.rectangle(RESISTOR.size + (10, 10))
-    area.move(RESISTOR.center - area.center)
-    return positivetoneify(RESISTOR, area, layer_set)
+    return RESISTOR
 
 
-def test_chip(neg_tone: int = 0) -> Device:
+def step_heights(
+    layer_set: LayerSet = LayerSet(),
+) -> Device:
+    """Creates test structures for measuring step heights of various layers.
+
+    Parameters:
+        layer_set (LayerSet): layer set to generate alignment marks for
+
+    Returns:
+        Device: test step heights
+    """
+    STEPS = Device(f"STEPS")
+    # gate
+    gs = STEPS << pg.rectangle((50, 50), layer=layer_set["gate"].gds_layer)
+    # via
+    os = STEPS << pg.rectangle((50, 50), layer=layer_set["via"].gds_layer)
+    os.move(gs.center - os.center + (100, 0))
+    # gate + via
+    gs_ox1 = STEPS << pg.rectangle((50, 50), layer=layer_set["gate"].gds_layer)
+    gs_ox2 = STEPS << pg.rectangle((60, 60), layer=layer_set["via"].gds_layer)
+    gs_ox1.move(os.center - gs_ox1.center + (100, 0))
+    gs_ox2.move(os.center - gs_ox2.center + (100, 0))
+    # source/drain
+    sd = STEPS << pg.rectangle((50, 50), layer=layer_set["sourcedrain"].gds_layer)
+    sd.move(gs.center - sd.center + (0, -100))
+    # ITO
+    ms = STEPS << pg.rectangle((50, 50), layer=layer_set["mesa"].gds_layer)
+    ms.move(sd.center - ms.center + (100, 0))
+    return STEPS
+
+
+def via_tests(
+    num_vias: List[int] = [10, 20, 30],
+    wire_width: float = 2,
+    pad_size: Tuple[float, float] = (100, 100),
+    layer_set: LayerSet = LayerSet(),
+) -> Device:
+    """Creates test structures for measuring vias.
+
+    Parameters:
+        num_vias (List[int]): increasing list of number of vias
+        wire_width (float): width of wire
+        pad_size (tuple(float,float)): pad length and width
+        layer_set (LayerSet): layer set to generate alignment marks for
+
+    Returns:
+        Device: via test array
+    """
+    VIA_TEST = Device(f"VIA_TEST({num_vias}, {wire_width})")
+    test_via = lambda nv: pg.test_via(
+        num_vias=nv,
+        wire_width=wire_width,
+        via_width=wire_width + 2,
+        via_spacing=4 * wire_width,
+        pad_size=pad_size,
+        min_pad_spacing=0,
+        pad_layer=layer_set["sourcedrain"].gds_layer,
+        wiring1_layer=layer_set["sourcedrain"].gds_layer,
+        wiring2_layer=layer_set["gate"].gds_layer,
+        via_layer=layer_set["via"].gds_layer,
+    )
+    vt_long = VIA_TEST << test_via(num_vias[-1])
+    sweep = VIA_TEST << pg.gridsweep(
+        function=test_via,
+        param_x={"nv": num_vias[:-1]},
+        param_y={},
+        spacing=(50, 50),
+        separation=True,
+        label_layer=None,
+    )
+    sweep.move((vt_long.xmin - sweep.xmin, vt_long.ymax - sweep.ymin + 50))
+    return VIA_TEST
+
+
+def test_chip() -> Device:
     #### parameters to sweep ###
 
     # transistors
-    L_gate = [2, 3, 5, 7, 10, 15, 25]
+    L_gate = [1, 2, 3, 5, 10, 20, 50]
     L_overlap = [2, 5, 10]
-    W_contact = [5, 10, 30, 50, 100]
+    W_channel = [5, 10, 20, 50, 100]
 
     # MIM/MOS capacitors
-    L_cap = [10, 20, 50, 100, 200]
-    W_cap = [10, 20, 50, 100]
+    L_cap = [5, 10, 20, 50, 100, 200]
+    W_cap = [5, 10, 20, 50, 100]
 
     # ITO resistors
-    L_resistor = [2, 3, 5, 10, 15, 25]
+    L_resistor = [1, 2, 3, 5, 10, 20, 50, 100, 200]
     W_resistor = [10, 20, 50, 100]
 
     # W resistors
-    SQ_resistor = [100, 500, 1000]
+    SQ_resistor = [50, 100, 500]
 
-    # positive tone for even GDS layers, negative tone for odd GDS layers
+    # via tests
+    via_counts = [[2, 10, 20, 100, 200, 1500], [2, 10, 20, 80]]
+    via_test_w = [2, 10]
+
     ls = LayerSet()
     ls.add_layer(
         name="gate",
-        gds_layer=0 + neg_tone,
+        gds_layer=1,
         gds_datatype=0,
         description="tungsten gate",
         color=(0.6, 0.7, 0.9),
     )
     ls.add_layer(
+        name="via",
+        gds_layer=2,
+        gds_datatype=0,
+        description="oxide via",
+        color=(0.8, 0.7, 0.2),
+    )
+    ls.add_layer(
         name="sourcedrain",
-        gds_layer=2 + neg_tone,
+        gds_layer=3,
         gds_datatype=0,
         description="tungsten source/drain",
         color=(0.5, 0.4, 0.4),
     )
     ls.add_layer(
         name="mesa",
-        gds_layer=4 + neg_tone,
+        gds_layer=4,
         gds_datatype=0,
         description="ito/igzo mesa",
         color=(0.6, 0.2, 0.5),
@@ -402,58 +455,73 @@ def test_chip(neg_tone: int = 0) -> Device:
     pad_size = (100, 100)
 
     # create alignment marks
-    align = alignment_mark_positivetone(ls)
-    alignment_offset = 700
-    resolutions = [1, 2, 3, 5]
-    rotate_i = lambda dev, i: dev.rotate(i * 90 if i // 2 == 0 else -i * 90 + 90)
-    x_offset = alignment_offset
-    y_offset = alignment_offset
-    for i in range(4):
-        alignment_marks = TOP << align
-        rotate_i(alignment_marks, i)
-        alignment_marks.move((x_offset, y_offset))
-        if i % 2 == 0:
-            x_offset = sample_w - alignment_offset
-        else:
-            y_offset = sample_w - alignment_offset
-            x_offset = alignment_offset
+    align = alignment_mark(layers=[l.gds_layer for _, l in ls._layers.items()])
+    alignment_marks = TOP << align
+    alignment_marks.move((-alignment_marks.xmin, -alignment_marks.ymin))
 
     # create lithography structures
     LITHO = Device("LITHO")
+    resolutions = [1, 1.5, 2]
+    align_dummy = alignment_mark(
+        layers=[l.gds_layer for _, l in ls._layers.items()][:2]
+    )
+    n_shift = {"gate": 0, "via": 1, "sourcedrain": 2, "mesa": 3}
     for layer_name, layer in ls._layers.items():
         for i in range(2):
-            rt = resolution_test([1, 2, 3], inverted=i, layer=layer.gds_layer)
+            rt = resolution_test(resolutions, inverted=i, layer=layer.gds_layer)
             rt.flatten()
             rt.move(-rt.center)
-            if layer_name == "gate":
+            if layer_name == "gate" or layer_name == "via":
                 cutout = rt << pg.rectangle(rt.size, layer=ls["sourcedrain"].gds_layer)
                 cutout.move(-cutout.center)
             rt_i = LITHO << rt
-            if layer_name == "gate":
-                rt_i.move(
-                    (-rt_i.xmin + i * (rt.xsize + 50), align.xsize - rt_i.ymin + 50)
-                )
-            if layer_name == "sourcedrain":
-                if i == 0:
-                    rt_i.move(
-                        (-rt_i.xmin + 2 * (rt.xsize + 50), align.xsize - rt_i.ymin + 50)
-                    )
-                else:
-                    rt_i.move(
-                        (
-                            -rt_i.xmin + (align.xsize - align.ysize / 2),
-                            (align.xsize - align.ysize / 2) - rt_i.ymin + 50,
-                        )
-                    )
-            if layer_name == "mesa":
-                rt_i.rotate(90)
-                rt_i.move(
-                    (
-                        align.xsize - rt_i.xmin + 50,
-                        align.xsize - rt_i.ymin + 50 - (i + 1) * (rt_i.ysize + 50),
-                    )
-                )
+            shift_x = (
+                0
+                - rt_i.xmin
+                + i * (rt.xsize + 50)
+                + n_shift[layer_name] * (align_dummy.xsize - 50)
+                + 150
+            )
+            shift_y = (
+                3 * (align_dummy.ysize + 25)
+                - rt_i.ymin
+                + 100
+                - n_shift[layer_name] * (align_dummy.ysize + 40)
+            )
+            rt_i.move((shift_x, shift_y))
     litho = TOP << LITHO
+
+    # create VDP structures
+    # gated VDP
+    for i in range(2):
+        vdp = gated_vdp(
+            gated=True,
+            rotation=i * 45,
+            pad_size=pad_size,
+            layer_set=ls,
+        )
+        vdp_i = TOP << vdp
+        shift_x = 0 - vdp_i.xmin + 1200 + i * (vdp_i.xsize + 100)
+        shift_y = 3 * (align_dummy.ysize + 25) - vdp_i.ymin
+        vdp_i.move((shift_x, shift_y))
+    # ungated VDP
+    for i in range(2):
+        vdp = gated_vdp(
+            gated=False,
+            rotation=i * 45,
+            pad_size=pad_size,
+            layer_set=ls,
+        )
+        vdp_i = TOP << vdp
+        shift_x = 2400 - vdp_i.xmin
+        shift_y = align_dummy.ysize + 25 - vdp_i.ymin + i * (vdp_i.ysize + 100)
+        vdp_i.move((shift_x, shift_y))
+
+    # create step-height test structures
+    sh_i = TOP << step_heights(ls)
+    shift_x = 2400 - sh_i.xmin
+    shift_y = 3 * (align_dummy.ysize + 25) - sh_i.ymin
+    sh_i.move((shift_x, shift_y))
 
     # create MOS CAP and MIM CAP test structures
     MOS = pg.gridsweep(
@@ -474,22 +542,22 @@ def test_chip(neg_tone: int = 0) -> Device:
     )
     mos = TOP << MOS
     mim = TOP << MIM
-    mos.move((litho.xmax - mos.xmin + 50, -mos.ymin))
-    mim.move((litho.xmax - mim.xmin + 50, mos.ymax - mim.ymin + 50))
+    mos.move((2900 - mos.xmin, -mos.ymin))
+    mim.move((2900 - mim.xmin, mos.ymax - mim.ymin + 50))
 
     # create transistors
     TRANSISTOR = pg.gridsweep(
-        function=lambda L_ov, W_c, L_g: transistor(
+        function=lambda L_ov, W, L_g: transistor(
             L_mesa=L_ov * 2 + L_g + 4,
             L_gate=L_g,
             L_overlap=L_ov,
-            W_mesa=4 + W_c,
-            W_contact=W_c,
+            W_mesa=W,
+            W_contact=W + 4,
             layer_set=ls,
             pad_size=pad_size,
         ),
         param_y={"L_g": L_gate},
-        param_x={"L_ov": L_overlap, "W_c": W_contact},
+        param_x={"L_ov": L_overlap, "W": W_channel},
         spacing=(50, 50),
         separation=True,
         label_layer=None,
@@ -508,40 +576,14 @@ def test_chip(neg_tone: int = 0) -> Device:
             layer_set=ls,
             pad_size=pad_size,
         ),
-        param_y={"L": L_resistor},
-        param_x={"W": W_resistor},
+        param_x={"L": L_resistor},
+        param_y={"W": W_resistor},
         spacing=(50, 50),
         separation=True,
         label_layer=None,
     )
     ito_res = TOP << RESISTOR
-    ito_res.move((sample_w / 2 - ito_res.x, trans.ymax + 50 - ito_res.ymin))
-
-    # create VDP structures
-    for i in range(2):
-        for j in range(2):
-            for k in range(2):
-                if (j == k) and (j == 1):
-                    continue
-                vdp = gated_vdp(
-                    gated=i,
-                    rotation=45 if j == k else 0,
-                    pad_size=pad_size,
-                    layer_set=ls,
-                )
-                vdp_i = TOP << vdp
-                x0 = (
-                    (ito_res.xmin - vdp_i.xmax - 50)
-                    if i == 1
-                    else (ito_res.xmax - vdp_i.xmin + 50)
-                )
-                xshift = 100 if i == 1 else 0
-                vdp_i.move(
-                    (
-                        x0 + ((-1) ** i) * (vdp_i.xsize + xshift) * j,
-                        trans.ymax + 50 - vdp_i.ymin + (vdp_i.ysize + 10) * k,
-                    )
-                )
+    ito_res.move((trans.xmin - ito_res.xmin, trans.ymax + 50 - ito_res.ymin))
 
     # create W resistors
     W_RESISTOR = pg.gridsweep(
@@ -552,32 +594,37 @@ def test_chip(neg_tone: int = 0) -> Device:
             layer_set=ls,
             pad_size=pad_size,
         ),
+        param_x={"sq": SQ_resistor, "layer_name": {"gate", "sourcedrain"}},
         param_y={},
-        param_x={"sq": SQ_resistor, "layer_name": ("gate", "sourcedrain")},
         spacing=(50, 50),
         separation=True,
         label_layer=None,
     )
     w_res = TOP << W_RESISTOR
-    w_res.move((litho.xmax - w_res.xmin, mim.ymax - w_res.ymin + 50))
+    w_res.move((trans.xmax - w_res.xmax, trans.ymin - w_res.ymax - 50))
+
+    # create via test structures
+    VIA_TESTS = pg.gridsweep(
+        function=lambda wi: via_tests(
+            num_vias=via_counts[wi],
+            wire_width=via_test_w[wi],
+            pad_size=pad_size,
+            layer_set=ls,
+        ),
+        param_x={},
+        param_y={"wi": [0, 1]},
+        spacing=(50, 50),
+        separation=True,
+        label_layer=None,
+    )
+    vt = TOP << VIA_TESTS
+    vt.move((ito_res.xmax - vt.xmin + 50, trans.ymax - vt.ymin + 50))
 
     return TOP
 
 
-def alignment():
-    X = pg.cross(length=100, width=2, layer=0)
-    R = pg.rectangle(size=(110, 110), layer=0)
-    R.move(-R.center)
-    D = Device("alignment")
-    D << pg.kl_boolean(A=R, B=X, operation="not", layer=0)
-    for l in (2, 4):
-        r = D << pg.rectangle(size=(110, 110), layer=l)
-        r.move(-r.center)
-    return D
-
-
 if __name__ == "__main__":
-    T = test_chip(neg_tone=0)
+    T = test_chip()
     # array
     A = Device("array")
     for i in range(8):
@@ -586,17 +633,16 @@ if __name__ == "__main__":
             ij.move(-ij.center)
             ij.move((7000 * i, 7000 * j))
             label = A << pg.text(
-                text=chr(0x41 + (7 - j)) + str(i + 1), size=200, layer=0
+                text=chr(0x41 + (7 - j)) + str(i + 1), size=300, layer=1
             )
             label.move((ij.xmin - label.xmin, ij.ymin - label.ymin))
-            label.move((3765, 925))
+            label.move((1750, 1100))
     A.move(-A.center)
-    X = alignment()
+    X = pg.cross(length=100, width=2, layer=1)
     for i in range(2):
         for j in range(2):
             x = A << X
             x.move((27200 * (-1) ** i, 27200 * (-1) ** j))
-    # qp(A)
     A.write_gds(
         "ito_test.gds",
         unit=1e-6,
