@@ -7,4 +7,10 @@
 *.png
 *.jpeg
 *.jpg
+*.dat
+*.csv
+*.html
+*.xlsx
 .phidlfem_D_hashes.json
+afm_data/
+__pycache__/

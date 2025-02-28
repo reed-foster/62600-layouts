@@ -45,7 +45,7 @@ def mos_cap(
     )
     bot.move((pad_size[0] - bot.xmin - 5, pad_size[1] / 2 - bot.y))
     bot_via = bot_pad << pg.rectangle(
-        (pad_size[0] + 5, pad_size[1] + 5), layer=layer_set["via"].gds_layer
+        (pad_size[0], pad_size[1]), layer=layer_set["via"].gds_layer
     )
     bot_via.move((pad_size[0] / 2 - bot_via.x, pad_size[1] / 2 - bot_via.y))
     bot_via_cover = bot_pad << pg.rectangle(
@@ -55,7 +55,7 @@ def mos_cap(
         (pad_size[0] / 2 - bot_via_cover.x, pad_size[1] / 2 - bot_via_cover.y)
     )
     bot_via_conn = bot_pad << pg.rectangle(
-        (2.5 + 2, W + 10 + 2), layer=layer_set["sourcedrain"].gds_layer
+        (2, W + 10 + 2), layer=layer_set["sourcedrain"].gds_layer
     )
     bot_via_conn.move(
         (
@@ -108,7 +108,7 @@ def mim_cap(
     )
     bot.move((pad_size[0] - bot.xmin, pad_size[1] / 2 - bot.y))
     bot_via = bot_pad << pg.rectangle(
-        (pad_size[0] + 5, pad_size[1] + 5), layer=layer_set["via"].gds_layer
+        (pad_size[0], pad_size[1]), layer=layer_set["via"].gds_layer
     )
     bot_via.move((pad_size[0] / 2 - bot_via.x, pad_size[1] / 2 - bot_via.y))
     bot_via_cover = bot_pad << pg.rectangle(
@@ -118,7 +118,7 @@ def mim_cap(
         (pad_size[0] / 2 - bot_via_cover.x, pad_size[1] / 2 - bot_via_cover.y)
     )
     bot_via_conn = bot_pad << pg.rectangle(
-        (2.5 + 2, W + 10 + 2), layer=layer_set["sourcedrain"].gds_layer
+        (2, W + 10 + 2), layer=layer_set["sourcedrain"].gds_layer
     )
     bot_via_conn.move(
         (
@@ -200,13 +200,13 @@ def transistor(
     # add pads
     gate_pad = pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
     gate_via = pg.rectangle(
-        (pad_size[0] + 5, pad_size[1] + 5), layer=layer_set["via"].gds_layer
+        (pad_size[0], pad_size[1]), layer=layer_set["via"].gds_layer
     )
     gate_via_cover = pg.rectangle(
         (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
     )
     gate_via_conn = pg.rectangle(
-        (L_gate + 2 * L_overlap + 2, 2.5 + 2), layer=layer_set["sourcedrain"].gds_layer
+        (L_gate + 2 * L_overlap + 2, 2), layer=layer_set["sourcedrain"].gds_layer
     )
     source_pad = pg.rectangle(pad_size, layer=layer_set["sourcedrain"].gds_layer)
     drain_pad = pg.rectangle(pad_size, layer=layer_set["sourcedrain"].gds_layer)
@@ -285,11 +285,11 @@ def gated_vdp(
             (pads["E1"].xmax - gate_pad.xmax, pads["S1"].ymin - gate_pad.ymin)
         )
         via = VDP << pg.rectangle(
-            (pad_size[0] + 5, pad_size[1] + 5), layer=layer_set["via"].gds_layer
+            (pad_size[0], pad_size[1]), layer=layer_set["via"].gds_layer
         )
         via.move(gate_pad.center - via.center)
         via_cover = VDP << pg.rectangle(
-            (pad_size[0] + 7, pad_size[1] + 7), layer=layer_set["sourcedrain"].gds_layer
+            (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
         )
         via_cover.move(via.center - via_cover.center)
         gate_contact = VDP << pg.rectangle(
@@ -340,15 +340,11 @@ def metal_resistor(
     )
     # add vias
     VIAS = Device("vias")
-    via = pg.rectangle(
-        (pad_size[0] + 5, pad_size[1] + 5), layer=layer_set["via"].gds_layer
-    )
+    via = pg.rectangle((pad_size[0], pad_size[1]), layer=layer_set["via"].gds_layer)
     via_cover = pg.rectangle(
         (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
     )
-    via_conn = pg.rectangle(
-        (width + 2, 2.5 + 2), layer=layer_set["sourcedrain"].gds_layer
-    )
+    via_conn = pg.rectangle((width + 2, 2), layer=layer_set["sourcedrain"].gds_layer)
     for i in range(2):
         contact_i = RESISTOR << contact
         contact_i.connect(contact_i.ports[1], m.ports[i + 1])
@@ -437,9 +433,7 @@ def via_tests(
     vt = lambda nv: test_via(
         num_vias=nv,
         wire_width=wire_width,
-        # wire1_width=wire_width,
-        # wire2_width=wire_width + 4,
-        via_width=wire_width + 2,
+        via_width=wire_width,
         via_spacing=4 * wire_width,
         pad_size=pad_size,
         min_pad_spacing=0,
@@ -462,7 +456,7 @@ def via_tests(
     return VIA_TEST
 
 
-def test_chip() -> Device:
+def test_chip(ls: LayerSet = LayerSet()) -> Device:
     #### parameters to sweep ###
 
     # transistors
@@ -485,35 +479,6 @@ def test_chip() -> Device:
     via_counts = [[2, 10, 20, 100, 200, 1500], [2, 10, 20, 80]]
     via_test_w = [2, 10]
 
-    ls = LayerSet()
-    ls.add_layer(
-        name="gate",
-        gds_layer=1,
-        gds_datatype=0,
-        description="tungsten gate",
-        color=(0.6, 0.7, 0.9),
-    )
-    ls.add_layer(
-        name="via",
-        gds_layer=2,
-        gds_datatype=0,
-        description="oxide via",
-        color=(0.8, 0.7, 0.2),
-    )
-    ls.add_layer(
-        name="sourcedrain",
-        gds_layer=3,
-        gds_datatype=0,
-        description="tungsten source/drain",
-        color=(0.5, 0.4, 0.4),
-    )
-    ls.add_layer(
-        name="mesa",
-        gds_layer=4,
-        gds_datatype=0,
-        description="ito/igzo mesa",
-        color=(0.6, 0.2, 0.5),
-    )
     TOP = Device("top")
     RESISTOR_ARRAY = Device("resistors")
 
@@ -614,7 +579,7 @@ def test_chip() -> Device:
     # create transistors
     TRANSISTOR = pg.gridsweep(
         function=lambda L_ov, W, L_g: transistor(
-            L_mesa=L_ov * 2 + L_g + 4,
+            L_mesa=L_ov * 2 + L_g - 1,
             L_gate=L_g,
             L_overlap=L_ov,
             W_mesa=W,
@@ -637,8 +602,8 @@ def test_chip() -> Device:
             L_mesa=L + 20,
             L_gate=0,
             L_overlap=10,
-            W_mesa=2 + W,
-            W_contact=W,
+            W_mesa=W,
+            W_contact=W + 2,
             layer_set=ls,
             pad_size=pad_size,
         ),
@@ -690,7 +655,36 @@ def test_chip() -> Device:
 
 
 if __name__ == "__main__":
-    T = test_chip()
+    ls = LayerSet()
+    ls.add_layer(
+        name="gate",
+        gds_layer=1,
+        gds_datatype=0,
+        description="tungsten gate",
+        color=(0.6, 0.7, 0.9),
+    )
+    ls.add_layer(
+        name="via",
+        gds_layer=2,
+        gds_datatype=0,
+        description="oxide via",
+        color=(0.8, 0.7, 0.2),
+    )
+    ls.add_layer(
+        name="sourcedrain",
+        gds_layer=3,
+        gds_datatype=0,
+        description="tungsten/nickel source/drain",
+        color=(0.5, 0.4, 0.4),
+    )
+    ls.add_layer(
+        name="mesa",
+        gds_layer=4,
+        gds_datatype=0,
+        description="ito/igzo mesa",
+        color=(0.6, 0.2, 0.5),
+    )
+    T = test_chip(ls)
     # array
     A = Device("array")
     for i in range(8):
@@ -699,20 +693,19 @@ if __name__ == "__main__":
             ij.move(-ij.center)
             ij.move((7000 * i, 7000 * j))
             label = A << pg.text(
-                text=chr(0x41 + (7 - j)) + str(i + 1), size=300, layer=1
+                text=chr(0x41 + (7 - j)) + str(i + 1),
+                size=300,
+                layer=ls["gate"].gds_layer,
             )
             label.move((ij.xmin - label.xmin, ij.ymin - label.ymin))
             label.move((1750, 1100))
-            label2 = A << pg.union(label, layer=3)
     A.move(-A.center)
-    X = pg.cross(length=100, width=2, layer=1)
-    X2 = pg.cross(length=100, width=3, layer=3)
-    for i in range(2):
-        for j in range(2):
-            x = A << X
-            x2 = A << X2
-            x.move((27200 * (-1) ** i, 27200 * (-1) ** j))
-            x2.move((27200 * (-1) ** i, 27200 * (-1) ** j))
+    for _, l in ls._layers.items():
+        X = pg.cross(length=100, width=2, layer=l.gds_layer)
+        for i in range(2):
+            for j in range(2):
+                x = A << X
+                x.move((27200 * (-1) ** i, 27200 * (-1) ** j))
     A.write_gds(
         "ito_test.gds",
         unit=1e-6,

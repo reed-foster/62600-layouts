@@ -55,7 +55,7 @@ def _via_iterable(
         orientation=90,
     )
     wire1w = VI.add_ref(
-        pg.compass(size=(via_spacing + 4, wire_width + 4), layer=wiring1_layer)
+        pg.compass(size=(via_spacing + 2, wire_width + 2), layer=wiring1_layer)
     )
     wire1w.move(wire1.center - wire1w.center)
 
