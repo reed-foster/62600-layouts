@@ -227,4 +227,7 @@ def test_via(
     pad2_overlay.xmin = pad2.xmin
     pad2_overlay.ymin = pad2.ymin
 
+    label = VR << pg.text(str(num_vias), layer=pad_layer)
+    label.move((pad2.xmin - label.xmax - 5, pad2.ymin - label.ymin))
+
     return VR

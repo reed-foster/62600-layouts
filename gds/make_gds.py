@@ -79,6 +79,7 @@ def mos_cap(
     t.move((m.xmax - t.xmin - 5, b.y - t.y))
     text = MOS << pg.text(f"W/L\n{W}/{L_overlap}", layer=layer_set["gate"].gds_layer)
     text.move((t.x - text.x, t.ymax + 10 - text.ymin))
+    MOS << pg.union(text, layer=layer_set["sourcedrain"].gds_layer)
 
     return MOS
 
@@ -140,6 +141,7 @@ def mim_cap(
     text.move(
         (t.xmax - pad_size[0] / 2 - text.x, t.y + pad_size[1] / 2 + 10 - text.ymin)
     )
+    MIM << pg.union(text, layer=layer_set["sourcedrain"].gds_layer)
 
     return MIM
 
@@ -240,6 +242,7 @@ def transistor(
         # align to drain / mesa
         text.move((mesa.x - text.x, drain_pad.ymax - text.ymin + 10))
         TRANSISTOR << text
+    TRANSISTOR << pg.union(text, layer=layer_set["sourcedrain"].gds_layer)
 
     return TRANSISTOR
 
@@ -378,6 +381,7 @@ def metal_resistor(
     # align to drain / mesa
     text.move((RESISTOR.xmin + pad_size[1] / 2 - text.x, RESISTOR.ymax - text.ymin + 5))
     RESISTOR << text
+    RESISTOR << pg.union(text, layer=layer_set["sourcedrain"].gds_layer)
     return RESISTOR
 
 
@@ -442,18 +446,100 @@ def via_tests(
         wiring2_layer=layer_set["gate"].gds_layer,
         via_layer=layer_set["via"].gds_layer,
     )
-    vt_long = VIA_TEST << vt(num_vias[-1])
     sweep = VIA_TEST << pg.gridsweep(
         function=vt,
-        param_x={"nv": num_vias[:-1]},
+        param_x={"nv": num_vias},
         param_y={},
         spacing=(50, 50),
         separation=True,
         label_layer=None,
     )
-    sweep.move((vt_long.xmin - sweep.xmin, vt_long.ymax - sweep.ymin + 50))
 
     return VIA_TEST
+
+
+def tlm(
+    contact_l: float = 10,
+    spacings: List[float] = [10, 10, 20, 50, 80, 100, 200],
+    contact_w: float = 100,
+    via_layer: int = None,
+    finger_layer: int = 3,
+    mesa_layer: int = 4,
+    gate_layer: int = 1,
+    pad_size: Tuple[float, float] = (80, 80),
+) -> Device:
+    """Creates transfer-length-method test structures.
+
+    Parameters:
+        contact_l (float): length of metal contact on semiconductor
+        spacings (List[float]): list of spacings between contacts
+        contact_w (float): width of contact/semiconductor
+        via_layer (int): if not None, layer to put via on
+        finger_layer (int): layer for metal fingers
+        mesa_layer (int): layer for semiconductor
+        gate_layer (int): if not None, layer to put gate on
+        pad_size (tuple(float,float)): width, height of pad
+
+    Returns:
+        Device: TLM structure
+    """
+    TLM = Device(f"TLM({contact_w},{spacings})")
+    if gate_layer == finger_layer:
+        # can't have gated TLM with contacts on the same layer as gate
+        return TLM
+    xoff = 0
+    for n, space in enumerate(spacings):
+        fp_w = space + 2 * contact_l
+        w = contact_w * 1.2 + 10
+        for i in range(2):
+            fp = TLM << pg.flagpole(
+                size=(fp_w, pad_size[1]),
+                stub_size=(contact_l, w),
+                shape=("d" if i % 2 else "p"),
+                taper_type=None,
+                layer=finger_layer,
+            )
+            if i % 2:
+                fp.movey(-fp.ymax + contact_w / 2 + 5)
+                fp.movex(xoff - fp.xmax)
+            else:
+                fp.movey(-fp.ymin - contact_w / 2 - 5)
+                fp.movex(xoff - fp.xmin + 50)
+            if via_layer is not None:
+                via = TLM << pg.rectangle(
+                    size=(contact_l, contact_w + 10), layer=via_layer
+                )
+                if i % 2:
+                    via.move((fp.xmax - contact_l / 2 - via.x, -via.y))
+                else:
+                    via.move((fp.xmin + contact_l / 2 - via.x, -via.y))
+            xoff = fp.xmax
+        text = TLM << pg.text(str(space), layer=finger_layer)
+        text.move((xoff - text.xmin + 5, -w / 2 - pad_size[1] + 10 - text.ymin))
+        if gate_layer is not None:
+            TLM << pg.union(text, layer=gate_layer)
+    # add mesa
+    mesa = pg.rectangle(size=(TLM.xsize + 50, contact_w), layer=mesa_layer)
+    mesa.move((TLM.x - mesa.x, -mesa.y))
+    # add gate
+    if gate_layer is not None:
+        gate = pg.rectangle(size=(mesa.xsize + 10, contact_w + 10), layer=gate_layer)
+        gate.move((mesa.xmin - gate.xmin - 5, -gate.y))
+        gate_pad = pg.rectangle(size=(TLM.xsize, pad_size[1]), layer=gate_layer)
+        gate_pad.move((TLM.x - gate_pad.x, TLM.ymax - gate_pad.ymin + 10))
+        gate_wire = pg.rectangle(size=(40, TLM.ysize / 2), layer=gate_layer)
+        gate_wire.move(
+            (
+                TLM.xmin + 2 * contact_l + spacings[0] + 5 - gate_wire.xmin,
+                gate.ymax - gate_wire.ymin - 10,
+            )
+        )
+        TLM << gate
+        TLM << gate_pad
+        TLM << gate_wire
+
+    TLM << mesa
+    return TLM
 
 
 def test_chip(ls: LayerSet = LayerSet()) -> Device:
@@ -469,15 +555,21 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
     W_cap = [5, 10, 20, 50, 100]
 
     # ITO resistors
-    L_resistor = [1, 2, 3, 5, 10, 20, 50, 100, 200]
+    L_resistor = [2, 5, 10, 20, 50, 100]
     W_resistor = [10, 20, 50, 100]
 
     # W resistors
     SQ_resistor = [50, 100, 500]
 
     # via tests
-    via_counts = [[2, 10, 20, 100, 200, 1500], [2, 10, 20, 80]]
-    via_test_w = [2, 10]
+    via_counts = [2, 50, 5, 10, 20]
+    via_test_w = 8
+
+    # tlm options
+    tlm_contact_l = 50
+    tlm_contact_w = 50
+    tlm_spacings = [10, 20, 50, 80, 100, 150]
+    tlm_pad_size = (100, 100)
 
     TOP = Device("top")
     RESISTOR_ARRAY = Device("resistors")
@@ -634,22 +726,40 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
     w_res = TOP << W_RESISTOR
     w_res.move((trans.xmax - w_res.xmax, trans.ymin - w_res.ymax - 50))
 
-    # create via test structures
-    VIA_TESTS = pg.gridsweep(
-        function=lambda wi: via_tests(
-            num_vias=via_counts[wi],
-            wire_width=via_test_w[wi],
-            pad_size=pad_size,
-            layer_set=ls,
-        ),
+    # create TLM
+    tlm_fn = lambda gated, bot: tlm(
+        contact_l=tlm_contact_l,
+        spacings=tlm_spacings,
+        contact_w=tlm_contact_w,
+        via_layer=ls["via"].gds_layer if bot else None,
+        finger_layer=ls["gate"].gds_layer if bot else ls["sourcedrain"].gds_layer,
+        mesa_layer=ls["mesa"],
+        gate_layer=ls["gate"].gds_layer if gated else None,
+        pad_size=tlm_pad_size,
+    )
+    tlm_1 = TOP << pg.gridsweep(
+        function=lambda bot: tlm_fn(False, bot),
         param_x={},
-        param_y={"wi": [0, 1]},
+        param_y={"bot": [True, False]},
         spacing=(50, 50),
         separation=True,
         label_layer=None,
     )
-    vt = TOP << VIA_TESTS
-    vt.move((ito_res.xmax - vt.xmin + 50, trans.ymax - vt.ymin + 50))
+    tlm_2 = TOP << tlm_fn(True, False)
+    tlm_1.move((ito_res.xmax - tlm_1.xmin + 20, trans.ymax - tlm_1.ymin + 50))
+    tlm_2.move((tlm_1.xmax - tlm_2.xmin + 20, trans.ymax - tlm_2.ymin + 20))
+
+    # create via test structures
+    VIA_TESTS_1 = via_tests(
+        num_vias=via_counts[2:], wire_width=via_test_w, pad_size=pad_size, layer_set=ls
+    )
+    VIA_TESTS_2 = via_tests(
+        num_vias=via_counts[:2], wire_width=via_test_w, pad_size=pad_size, layer_set=ls
+    )
+    vt1 = TOP << VIA_TESTS_1
+    vt2 = TOP << VIA_TESTS_2
+    vt1.move((tlm_1.xmax - vt1.xmin + 20, tlm_2.ymax - vt1.ymin + 20))
+    vt2.move((tlm_1.xmax - vt2.xmin + 20, vt1.ymax - vt2.ymin + 20))
 
     return TOP
 
@@ -702,10 +812,13 @@ if __name__ == "__main__":
     A.move(-A.center)
     for _, l in ls._layers.items():
         X = pg.cross(length=100, width=2, layer=l.gds_layer)
+        C = pg.rectangle(size=(10, 10), layer=l.gds_layer)
         for i in range(2):
             for j in range(2):
                 x = A << X
                 x.move((27200 * (-1) ** i, 27200 * (-1) ** j))
+                c = A << C
+                c.move((27295 * (-1) ** i - c.x, 27295 * (-1) ** j - c.y))
     A.write_gds(
         "ito_test.gds",
         unit=1e-6,
