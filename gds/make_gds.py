@@ -513,6 +513,8 @@ def tlm(
                     via.move((fp.xmax - contact_l / 2 - via.x, -via.y))
                 else:
                     via.move((fp.xmin + contact_l / 2 - via.x, -via.y))
+                # add vias to lower metal pads
+                # pad_via = TLM << pg.rectangle(size=(fp_w, pad_size[1]), layer=
             xoff = fp.xmax
         text = TLM << pg.text(str(space), layer=finger_layer)
         text.move((xoff - text.xmin + 5, -w / 2 - pad_size[1] + 10 - text.ymin))
@@ -594,9 +596,6 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
             rt = resolution_test(resolutions, inverted=i, layer=layer.gds_layer)
             rt.flatten()
             rt.move(-rt.center)
-            if layer_name == "gate" or layer_name == "via":
-                cutout = rt << pg.rectangle(rt.size, layer=ls["sourcedrain"].gds_layer)
-                cutout.move(-cutout.center)
             rt_i = LITHO << rt
             shift_x = (
                 0
