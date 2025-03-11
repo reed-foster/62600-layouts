@@ -464,6 +464,7 @@ def tlm(
     contact_w: float = 100,
     via_layer: int = None,
     finger_layer: int = 3,
+    pad_layer: int = 3,
     mesa_layer: int = 4,
     gate_layer: int = 1,
     pad_size: Tuple[float, float] = (80, 80),
@@ -476,6 +477,7 @@ def tlm(
         contact_w (float): width of contact/semiconductor
         via_layer (int): if not None, layer to put via on
         finger_layer (int): layer for metal fingers
+        pad_layer (int): layer for metal pads
         mesa_layer (int): layer for semiconductor
         gate_layer (int): if not None, layer to put gate on
         pad_size (tuple(float,float)): width, height of pad
@@ -513,8 +515,20 @@ def tlm(
                     via.move((fp.xmax - contact_l / 2 - via.x, -via.y))
                 else:
                     via.move((fp.xmin + contact_l / 2 - via.x, -via.y))
-                # add vias to lower metal pads
-                # pad_via = TLM << pg.rectangle(size=(fp_w, pad_size[1]), layer=
+                if pad_layer != finger_layer:
+                    # add vias to lower metal pads
+                    pad_via = TLM << pg.rectangle(
+                        size=(fp_w, pad_size[1]), layer=via_layer
+                    )
+                    pad_via.movex(fp.xmax - pad_via.xmax)
+                    if i % 2:
+                        pad_via.movey(fp.ymin - pad_via.ymin)
+                    else:
+                        pad_via.movey(fp.ymax - pad_via.ymax)
+                    top_pad = TLM << pg.rectangle(
+                        size=(fp_w + 2, pad_size[1] + 2), layer=pad_layer
+                    )
+                    top_pad.move(pad_via.center - top_pad.center)
             xoff = fp.xmax
         text = TLM << pg.text(str(space), layer=finger_layer)
         text.move((xoff - text.xmin + 5, -w / 2 - pad_size[1] + 10 - text.ymin))
@@ -539,6 +553,14 @@ def tlm(
         TLM << gate
         TLM << gate_pad
         TLM << gate_wire
+        pad_via = TLM << pg.rectangle(
+            size=(gate_pad.xsize, pad_size[1]), layer=via_layer
+        )
+        top_pad = TLM << pg.rectangle(
+            size=(gate_pad.xsize + 2, pad_size[1] + 2), layer=pad_layer
+        )
+        pad_via.move(gate_pad.center - pad_via.center)
+        top_pad.move(gate_pad.center - top_pad.center)
 
     TLM << mesa
     return TLM
