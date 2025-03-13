@@ -462,7 +462,7 @@ def tlm(
     contact_l: float = 10,
     spacings: List[float] = [10, 10, 20, 50, 80, 100, 200],
     contact_w: float = 100,
-    via_layer: int = None,
+    via_layer: int = 2,
     finger_layer: int = 3,
     pad_layer: int = 3,
     mesa_layer: int = 4,
@@ -475,7 +475,7 @@ def tlm(
         contact_l (float): length of metal contact on semiconductor
         spacings (List[float]): list of spacings between contacts
         contact_w (float): width of contact/semiconductor
-        via_layer (int): if not None, layer to put via on
+        via_layer (int): layer to put via on
         finger_layer (int): layer for metal fingers
         pad_layer (int): layer for metal pads
         mesa_layer (int): layer for semiconductor
@@ -507,7 +507,7 @@ def tlm(
             else:
                 fp.movey(-fp.ymin - contact_w / 2 - 5)
                 fp.movex(xoff - fp.xmin + 50)
-            if via_layer is not None:
+            if finger_layer < via_layer:
                 via = TLM << pg.rectangle(
                     size=(contact_l, contact_w + 10), layer=via_layer
                 )
@@ -752,9 +752,10 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
         contact_l=tlm_contact_l,
         spacings=tlm_spacings,
         contact_w=tlm_contact_w,
-        via_layer=ls["via"].gds_layer if bot else None,
+        via_layer=ls["via"].gds_layer,
         finger_layer=ls["gate"].gds_layer if bot else ls["sourcedrain"].gds_layer,
-        mesa_layer=ls["mesa"],
+        pad_layer=ls["sourcedrain"].gds_layer,
+        mesa_layer=ls["mesa"].gds_layer,
         gate_layer=ls["gate"].gds_layer if gated else None,
         pad_size=tlm_pad_size,
     )
