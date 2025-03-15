@@ -198,12 +198,6 @@ def transistor(
     TRANSISTOR << source
     TRANSISTOR << drain
     TRANSISTOR << mesa
-    if L_gate > 10:
-        # add extra rectangle on 5th layer
-        src_ext = TRANSISTOR << pg.rectangle((15, W_contact - 2), layer=5)
-        src_ext.move((source.xmax - src_ext.x, mesa.y - src_ext.y))
-        drain_ext = TRANSISTOR << pg.rectangle((15, W_contact - 2), layer=5)
-        drain_ext.move((drain.xmin - drain_ext.x, mesa.y - drain_ext.y))
 
     # add pads
     gate_pad = pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
@@ -279,6 +273,15 @@ def gated_vdp(
     pad.add_port(
         name=1, midpoint=(contact.xmin + 5, contact.y), orientation=180, width=10
     )
+    pad << pg.union(pad, layer=layer_set["mesa"].gds_layer)
+    if gated:
+        gate_contact = pad << pg.rectangle((25, 15), layer=layer_set["gate"].gds_layer)
+        gate_contact.move(contact.center - gate_contact.center)
+        gate_pad = pad << pg.rectangle(
+            (pad_size[0] + 5, pad_size[1] + 5), layer=layer_set["gate"].gds_layer
+        )
+        # gate_pad.move((contact.x - gate_pad.x, contact.ymax - 10 - gate_pad.ymin))
+        gate_pad.move((gate_contact.xmax - 5 - gate_pad.xmin, contact.y - gate_pad.y))
     pads = {}
     for p in ito.ports:
         pad_i = VDP << pad
@@ -309,6 +312,42 @@ def gated_vdp(
         gate_contact.move(
             (gate_pad.x - gate_contact.xmax, gate_pad.y - gate_contact.ymin)
         )
+    VDP.rotate(rotation)
+    return VDP
+
+
+def vdp_metal(
+    metal_layer: str = "sourcedrain",
+    rotation: float = 0,
+    pad_size: Tuple[float, float] = (100, 100),
+    layer_set: LayerSet = LayerSet(),
+) -> Device:
+    """Creates Van-der-Pauw test structure.
+
+    Parameters:
+        metal_layer (string): name of layer on which to place VDP cell
+        rotation (float): rotation of test structure in degrees
+        pad_size (tuple(float,float)): pad length and width
+        layer_set (LayerSet): layer set to generate alignment marks for
+
+    Returns:
+        Device: VDP structure
+    """
+    VDP = Device(f"VDP({metal_layer})")
+    gds_layer = layer_set[metal_layer].gds_layer
+    mesa = VDP << vdp(l=2 * max(pad_size), w=10, layer=gds_layer)
+    pad = pg.rectangle(pad_size, layer=gds_layer)
+    pad.move((-pad.xmin, -pad.y))
+    contact = pad << pg.rectangle((20, 10), layer=gds_layer)
+    contact.move((-contact.xmax, -contact.y))
+    pad.add_port(
+        name=1, midpoint=(contact.xmin + 5, contact.y), orientation=180, width=10
+    )
+    pads = {}
+    for p in mesa.ports:
+        pad_i = VDP << pad
+        pad_i.connect(pad_i.ports[1], mesa.ports[p])
+        pads[p] = pad_i
     VDP.rotate(rotation)
     return VDP
 
@@ -651,7 +690,7 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
             layer_set=ls,
         )
         vdp_i = TOP << vdp
-        shift_x = 0 - vdp_i.xmin + 1200 + i * (vdp_i.xsize + 100)
+        shift_x = 0 - vdp_i.xmin + 1200 + i * (vdp_i.xsize + 50)
         shift_y = 3 * (align_dummy.ysize + 25) - vdp_i.ymin
         vdp_i.move((shift_x, shift_y))
     # ungated VDP
@@ -664,13 +703,37 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
         )
         vdp_i = TOP << vdp
         shift_x = 2400 - vdp_i.xmin
-        shift_y = align_dummy.ysize + 25 - vdp_i.ymin + i * (vdp_i.ysize + 100)
+        shift_y = align_dummy.ysize + 25 - vdp_i.ymin + i * (vdp_i.ysize + 50)
         vdp_i.move((shift_x, shift_y))
+
+    # create metal VDP structures
+    top_vdp = TOP << vdp_metal(
+        metal_layer="sourcedrain",
+        rotation=45,
+        pad_size=pad_size,
+        layer_set=ls,
+    )
+    top_vdp.move(
+        (
+            2400 - top_vdp.xmin,
+            align_dummy.ysize + 25 - top_vdp.ymin + 2 * (top_vdp.ysize + 50),
+        )
+    )
+    bot_vdp = TOP << vdp_metal(
+        metal_layer="gate",
+        rotation=45,
+        pad_size=pad_size,
+        layer_set=ls,
+    )
+    bot_vdp.move(
+        (1800 - bot_vdp.xmin, 2 * (align_dummy.ysize + 25) - bot_vdp.ymin + 180)
+    )
 
     # create step-height test structures
     sh_i = TOP << step_heights(ls)
-    shift_x = 2400 - sh_i.xmin
-    shift_y = 3 * (align_dummy.ysize + 25) - sh_i.ymin
+    sh_i.rotate(90)
+    shift_x = 2200 - sh_i.xmin
+    shift_y = 2 * (align_dummy.ysize + 25) - sh_i.ymin - 50
     sh_i.move((shift_x, shift_y))
 
     # create MOS CAP and MIM CAP test structures
@@ -832,11 +895,11 @@ if __name__ == "__main__":
             ij.move((7000 * i, 7000 * j))
             label = A << pg.text(
                 text=chr(0x41 + (7 - j)) + str(i + 1),
-                size=300,
+                size=200,
                 layer=ls["gate"].gds_layer,
             )
             label.move((ij.xmin - label.xmin, ij.ymin - label.ymin))
-            label.move((1750, 1100))
+            label.move((1750, 1050))
     A.move(-A.center)
     for _, l in ls._layers.items():
         X = pg.cross(length=100, width=2, layer=l.gds_layer)
