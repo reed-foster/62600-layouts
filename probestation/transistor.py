@@ -31,38 +31,59 @@ fnames = [
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 fig, ax = plt.subplots(2, 2)
 legend = []
-for f, fname in enumerate(fnames):
-    num_Vg = 0
+
+
+def get_curve_size(fname):
     data = False
-    row_len = -1
-    num_Vd = 1
-    start_row = 0
+    num_transfer_Vg = 0
+    num_transfer_Vd = 0
+    num_output_Vg = 0
+    num_output_Vd = 0
     with open(fname) as csvfile:
         reader = csv.reader(csvfile)
         for n, row in enumerate(reader):
             if not data:
                 if len(row) > 0 and row[0] == "IS":
-                    row_len = len(row)
-                    num_Vd = (row_len - 2) // 4
-                    start_row = n + 1
+                    num_transfer_Vd = (len(row) - 2) // 4
                     data = True
                 continue
-            if len(row) != row_len:
+            if len(row) == 0:
+                break
+            num_transfer_Vg += 1
+        data = False
+        for n, row in enumerate(reader):
+            if not data:
+                if len(row) > 0 and row[0] == "IS":
+                    num_output_Vg = (len(row) - 2) // 4
+                    data = True
                 continue
-            num_Vg += 1
+            if len(row) == 0:
+                break
+            num_output_Vd += 1
+    return num_transfer_Vg, num_transfer_Vd, num_output_Vg, num_output_Vd
+
+
+for f, fname in enumerate(fnames):
+    num_transfer_Vg, num_transfer_Vd, num_output_Vg, num_output_Vd = get_curve_size(
+        fname
+    )
     with open(fname) as csvfile:
         reader = csv.reader(csvfile)
-        Vg = np.zeros(num_Vg)
-        Id = np.zeros((num_Vg, num_Vd))
-        Ig = np.zeros((num_Vg, num_Vd))
+        Vg = np.zeros(num_transfer_Vg)
+        Id = np.zeros((num_transfer_Vg, num_transfer_Vd))
+        Ig = np.zeros((num_transfer_Vg, num_transfer_Vd))
         n_vg = 0
         for n, row in enumerate(reader):
-            if n < start_row or len(row) != row_len:
+            if len(row) != num_transfer_Vd * 4 + 2:
+                if n_vg == 0:
+                    continue
+                break
+            if row[0] == "IS":
                 continue
-            Vg[n_vg] = float(row[3 * num_Vd])
-            for i in range(num_Vd):
-                Ig[n_vg, i] = float(row[3 * num_Vd + 1 + i])
-                Id[n_vg, i] = float(row[2 * num_Vd + i])
+            Vg[n_vg] = float(row[3 * num_transfer_Vd])
+            for i in range(num_transfer_Vd):
+                Ig[n_vg, i] = float(row[3 * num_transfer_Vd + 1 + i])
+                Id[n_vg, i] = float(row[2 * num_transfer_Vd + i])
             n_vg += 1
         ax[0, 0].semilogy(Vg, Id * 1e6 / 100, ".", color=colors[0])
         ax[0, 0].semilogy(Vg, Ig * 1e6 / 100, ".", color=colors[1])
@@ -73,6 +94,24 @@ for f, fname in enumerate(fnames):
             ".",
             color=colors[1],
         )
+        Vd = np.zeros(num_output_Vd)
+        Id = np.zeros((num_output_Vd, num_output_Vg))
+        Ig = np.zeros((num_output_Vd, num_output_Vg))
+        n_vd = 0
+        for n, row in enumerate(reader):
+            if len(row) != num_output_Vg * 4 + 2:
+                if n_vd == 0:
+                    continue
+                break
+            if row[0] == "IS":
+                continue
+            Vd[n_vd] = float(row[num_output_Vg])
+            for i in range(num_output_Vg):
+                Ig[n_vd, i] = float(row[3 * num_output_Vg + 1 + i])
+                Id[n_vd, i] = float(row[num_output_Vg + 1 + i])
+            n_vd += 1
+        ax[1, 0].plot(Vd, Id * 1e6 / 100, ".", color=colors[0])
+
 ax[0, 0].set_xlabel("Vgs [V]")
 ax[0, 1].set_xlabel("Vgs [V]")
 ax[0, 0].set_ylabel("Id,Ig [uA/um]")
@@ -81,6 +120,8 @@ ax[1, 1].set_xlabel("Vgs [V]")
 ax[1, 1].set_ylabel("gm [uA/um/V]")
 _, top = ax[1, 1].get_ylim()
 ax[1, 1].set_ylim([-0.1 * top, top])
+ax[1, 0].set_xlabel("Vds [V]")
+ax[1, 0].set_ylabel("Id [uA/um]")
 # ax[0].set_ylim([1e-9, 1e-2])
 # ax[1].set_ylim([1e-9, 1e-2])
 # fig.tight_layout()

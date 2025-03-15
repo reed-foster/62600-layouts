@@ -81,8 +81,26 @@ fnames = [
     # "wafer_O/wafer_O_D4_TLM_100_gated_0_10_20.dat",
     # "wafer_O/wafer_O_D4_TLM_150_gated_0_10_20.dat",
     # "wafer_T/wafer_T_A1_BOTTLM_10_gated_0_10_20.dat",
-    "wafer_T/wafer_T_A1_TOPTLM_10_gated_0_10_20.dat",
+    # "wafer_T/wafer_T_A1_TOPTLM_10_gated_0_10_20.dat",
     # "wafer_T/wafer_T_D4_TOPTLM_10_gated_0_10_20.dat",
+    # "wafer_O/wafer_O_D5_TLM_10_gated_0_10_20.dat",
+    # "wafer_O/wafer_O_D5_TLM_20_gated_0_10_20.dat",
+    # "wafer_O/wafer_O_D5_TLM_50_gated_0_10_20.dat",
+    # "wafer_O/wafer_O_D5_TLM_80_gated_0_10_20.dat",
+    # "wafer_O/wafer_O_D5_TLM_100_gated_0_10_20.dat",
+    # "wafer_O/wafer_O_D5_TLM_150_gated_0_10_20.dat",
+    # "wafer_Q/wafer_Q_D5_TLM_10_gated_0_10_20.dat",
+    # "wafer_Q/wafer_Q_D5_TLM_20_gated_0_10_20.dat",
+    # "wafer_Q/wafer_Q_D5_TLM_50_gated_0_10_20.dat",
+    # "wafer_Q/wafer_Q_D5_TLM_80_gated_0_10_20.dat",
+    # "wafer_Q/wafer_Q_D5_TLM_100_gated_0_10_20.dat",
+    # "wafer_Q/wafer_Q_D5_TLM_150_gated_0_10_20.dat",
+    "wafer_T/wafer_T_B4_TLM_10_gated_0_10_20.dat",
+    "wafer_T/wafer_T_B4_TLM_20_gated_0_10_20.dat",
+    "wafer_T/wafer_T_B4_TLM_50_gated_0_10_20.dat",
+    "wafer_T/wafer_T_B4_TLM_80_gated_0_10_20.dat",
+    "wafer_T/wafer_T_B4_TLM_100_gated_0_10_20.dat",
+    "wafer_T/wafer_T_B4_TLM_150_gated_0_10_20.dat",
 ]
 
 
@@ -149,8 +167,8 @@ for f, fname in enumerate(fnames):
             # fit IV to resistor
             Ifit = np.array(I[i])
             Vfit = np.array(V)
-            Ifit = Ifit[np.abs(Vfit) < 1]
-            Vfit = Vfit[np.abs(Vfit) < 1]
+            Ifit = Ifit[np.abs(Vfit) < 0.5]
+            Vfit = Vfit[np.abs(Vfit) < 0.5]
             # Ifit = Ifit[(Vfit > 0)]
             # Vfit = Vfit[(Vfit > 0)]
             b, r2 = fit_xy(Ifit, Vfit)
@@ -187,7 +205,7 @@ for f, fname in enumerate(fnames):
 ax[0].set_xlabel("V [V]")
 ax[0].set_ylabel("I [uA]")
 # ax[0].set_xlim([-2,2])
-ax[0].legend()
+# ax[0].legend()
 res_list = np.array(res_list)  # ohm*m
 L_list = np.array(L_list)  # m
 for i in range(3):
