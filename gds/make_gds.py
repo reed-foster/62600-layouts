@@ -198,6 +198,12 @@ def transistor(
     TRANSISTOR << source
     TRANSISTOR << drain
     TRANSISTOR << mesa
+    if L_gate > 10:
+        # add extra rectangle on 5th layer
+        src_ext = TRANSISTOR << pg.rectangle((15, W_contact - 2), layer=5)
+        src_ext.move((source.xmax - src_ext.x, mesa.y - src_ext.y))
+        drain_ext = TRANSISTOR << pg.rectangle((15, W_contact - 2), layer=5)
+        drain_ext.move((drain.xmin - drain_ext.x, mesa.y - drain_ext.y))
 
     # add pads
     gate_pad = pg.rectangle(pad_size, layer=layer_set["gate"].gds_layer)
