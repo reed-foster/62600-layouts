@@ -3,10 +3,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 fnames = [
+    "after_annealing/after_gas_225deg/w50_l_3_new.dat",
     # "wafer_G/wafer_G_A1_transistor_100_2_2.dat",
     # "wafer_T/wafer_T_A1_transistor_100_1_5.dat",
     # "wafer_T/wafer_T_A1_transistor_100_2_2.dat",
-    "wafer_T/wafer_T_G4_transistor_100_20_5.dat",
+    # "wafer_T/wafer_T_G4_transistor_100_20_5.dat",
     # "wafer_G_A1_transistor_100_25_2.dat",
     # "wafer_G_A1_transistor_100_2_5_damaged.dat",
     # "wafer_G_A1_transistor_100_3_2.dat",
@@ -39,12 +40,18 @@ def get_curve_size(fname):
     num_transfer_Vd = 0
     num_output_Vg = 0
     num_output_Vd = 0
+    rowlen_transfer = 0
+    rowlen_output = 0
     with open(fname) as csvfile:
         reader = csv.reader(csvfile)
         for n, row in enumerate(reader):
             if not data:
                 if len(row) > 0 and row[0] == "IS":
-                    num_transfer_Vd = (len(row) - 2) // 4
+                    if row[-1] == "ACCSTRESS":
+                        num_transfer_Vd = (len(row) - 2) // 4
+                    else:
+                        num_transfer_Vd = (len(row) - 1) // 4
+                    rowlen_transfer = len(row)
                     data = True
                 continue
             if len(row) == 0:
@@ -54,19 +61,36 @@ def get_curve_size(fname):
         for n, row in enumerate(reader):
             if not data:
                 if len(row) > 0 and row[0] == "IS":
-                    num_output_Vg = (len(row) - 2) // 4
+                    if row[-1] == "ACCSTRESS":
+                        num_output_Vg = (len(row) - 2) // 4
+                    else:
+                        num_output_Vg = (len(row) - 1) // 4
+                    rowlen_output = len(row)
                     data = True
                 continue
             if len(row) == 0:
                 break
             num_output_Vd += 1
-    return num_transfer_Vg, num_transfer_Vd, num_output_Vg, num_output_Vd
+
+    return (
+        num_transfer_Vg,
+        num_transfer_Vd,
+        rowlen_transfer,
+        num_output_Vg,
+        num_output_Vd,
+        rowlen_output,
+    )
 
 
 for f, fname in enumerate(fnames):
-    num_transfer_Vg, num_transfer_Vd, num_output_Vg, num_output_Vd = get_curve_size(
-        fname
-    )
+    (
+        num_transfer_Vg,
+        num_transfer_Vd,
+        rowlen_transfer,
+        num_output_Vg,
+        num_output_Vd,
+        rowlen_output,
+    ) = get_curve_size(fname)
     with open(fname) as csvfile:
         reader = csv.reader(csvfile)
         Vg = np.zeros(num_transfer_Vg)
@@ -74,7 +98,7 @@ for f, fname in enumerate(fnames):
         Ig = np.zeros((num_transfer_Vg, num_transfer_Vd))
         n_vg = 0
         for n, row in enumerate(reader):
-            if len(row) != num_transfer_Vd * 4 + 2:
+            if len(row) != rowlen_transfer:
                 if n_vg == 0:
                     continue
                 break
@@ -99,7 +123,7 @@ for f, fname in enumerate(fnames):
         Ig = np.zeros((num_output_Vd, num_output_Vg))
         n_vd = 0
         for n, row in enumerate(reader):
-            if len(row) != num_output_Vg * 4 + 2:
+            if len(row) != rowlen_output:
                 if n_vd == 0:
                     continue
                 break
