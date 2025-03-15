@@ -21,6 +21,7 @@ def mos_cap(
     L_overlap: float = 100,
     L_contact: float = 10,
     W: float = 100,
+    cover_bottom: bool = True,
     layer_set: LayerSet = LayerSet(),
     pad_size: Tuple[float, float] = (100, 100),
 ) -> Device:
@@ -31,6 +32,7 @@ def mos_cap(
         L_overlap (float): overlap between gate and mesa
         L_contact (float): overlap (contact) between sourcedrain and mesa
         W (float): width of capacitor structure
+        cover_bottom (bool): if True, include a pad on sourcedrain layer that overlaps gate layer
         layer_set (LayerSet): layers
         pad_size (tuple(float,float)): pad length and width
 
@@ -48,21 +50,22 @@ def mos_cap(
         (pad_size[0], pad_size[1]), layer=layer_set["via"].gds_layer
     )
     bot_via.move((pad_size[0] / 2 - bot_via.x, pad_size[1] / 2 - bot_via.y))
-    bot_via_cover = bot_pad << pg.rectangle(
-        (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
-    )
-    bot_via_cover.move(
-        (pad_size[0] / 2 - bot_via_cover.x, pad_size[1] / 2 - bot_via_cover.y)
-    )
-    bot_via_conn = bot_pad << pg.rectangle(
-        (2, W + 10 + 2), layer=layer_set["sourcedrain"].gds_layer
-    )
-    bot_via_conn.move(
-        (
-            bot_pad.xmax - L_overlap - 10 - bot_via_conn.xmin,
-            pad_size[1] / 2 - bot_via_conn.y,
+    if cover_bottom:
+        bot_via_cover = bot_pad << pg.rectangle(
+            (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
         )
-    )
+        bot_via_cover.move(
+            (pad_size[0] / 2 - bot_via_cover.x, pad_size[1] / 2 - bot_via_cover.y)
+        )
+        bot_via_conn = bot_pad << pg.rectangle(
+            (2, W + 10 + 2), layer=layer_set["sourcedrain"].gds_layer
+        )
+        bot_via_conn.move(
+            (
+                bot_pad.xmax - L_overlap - 10 - bot_via_conn.xmin,
+                pad_size[1] / 2 - bot_via_conn.y,
+            )
+        )
     mesa = pg.rectangle((L_overlap + L_contact, W), layer=layer_set["mesa"].gds_layer)
     top_pad = pg.rectangle(
         (pad_size[0] + L_contact, pad_size[1]), layer=layer_set["sourcedrain"].gds_layer
@@ -87,6 +90,7 @@ def mos_cap(
 def mim_cap(
     L_overlap: float = 100,
     W: float = 100,
+    cover_bottom: bool = True,
     layer_set: LayerSet = LayerSet(),
     pad_size: Tuple[float, float] = (100, 100),
 ) -> Device:
@@ -95,6 +99,7 @@ def mim_cap(
     Parameters:
         L_overlap (float): amount to extend pads to overlap
         W (float): width of overlapped region
+        cover_bottom (bool): if True, include a pad on sourcedrain layer that overlaps gate layer
         layer_set (LayerSet): layers
         pad_size (tuple(float,float)): pad length and width
 
@@ -112,21 +117,22 @@ def mim_cap(
         (pad_size[0], pad_size[1]), layer=layer_set["via"].gds_layer
     )
     bot_via.move((pad_size[0] / 2 - bot_via.x, pad_size[1] / 2 - bot_via.y))
-    bot_via_cover = bot_pad << pg.rectangle(
-        (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
-    )
-    bot_via_cover.move(
-        (pad_size[0] / 2 - bot_via_cover.x, pad_size[1] / 2 - bot_via_cover.y)
-    )
-    bot_via_conn = bot_pad << pg.rectangle(
-        (2, W + 10 + 2), layer=layer_set["sourcedrain"].gds_layer
-    )
-    bot_via_conn.move(
-        (
-            bot_pad.xmax - L_overlap - 10 - bot_via_conn.xmin,
-            pad_size[1] / 2 - bot_via_conn.y,
+    if cover_bottom:
+        bot_via_cover = bot_pad << pg.rectangle(
+            (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
         )
-    )
+        bot_via_cover.move(
+            (pad_size[0] / 2 - bot_via_cover.x, pad_size[1] / 2 - bot_via_cover.y)
+        )
+        bot_via_conn = bot_pad << pg.rectangle(
+            (2, W + 10 + 2), layer=layer_set["sourcedrain"].gds_layer
+        )
+        bot_via_conn.move(
+            (
+                bot_pad.xmax - L_overlap - 10 - bot_via_conn.xmin,
+                pad_size[1] / 2 - bot_via_conn.y,
+            )
+        )
     top_pad = pg.rectangle(pad_size, layer=layer_set["sourcedrain"].gds_layer)
     top_pad.move((-top_pad.xmin, -top_pad.ymin))
     top = top_pad << pg.rectangle(
@@ -152,6 +158,7 @@ def transistor(
     L_overlap: float = 2,
     W_mesa: float = 12,
     W_contact: float = 10,
+    cover_bottom: bool = True,
     layer_set: LayerSet = LayerSet(),
     pad_size: Tuple[float, float] = (100, 100),
 ) -> Device:
@@ -163,6 +170,7 @@ def transistor(
         L_overlap (float): length of overlap between gate and source/drain
         W_mesa (float): width of channel mesa
         W_contact (float): width of source/drain contacts
+        cover_bottom (bool): if True, include a pad on sourcedrain layer that overlaps gate layer
         layer_set (LayerSet): layers
         pad_size (tuple(float,float)): pad length and width
 
@@ -204,25 +212,28 @@ def transistor(
     gate_via = pg.rectangle(
         (pad_size[0], pad_size[1]), layer=layer_set["via"].gds_layer
     )
-    gate_via_cover = pg.rectangle(
-        (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
-    )
-    gate_via_conn = pg.rectangle(
-        (L_gate + 2 * L_overlap + 2, 2), layer=layer_set["sourcedrain"].gds_layer
-    )
+    if cover_bottom:
+        gate_via_cover = pg.rectangle(
+            (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
+        )
+        gate_via_conn = pg.rectangle(
+            (L_gate + 2 * L_overlap + 2, 2), layer=layer_set["sourcedrain"].gds_layer
+        )
     source_pad = pg.rectangle(pad_size, layer=layer_set["sourcedrain"].gds_layer)
     drain_pad = pg.rectangle(pad_size, layer=layer_set["sourcedrain"].gds_layer)
     gate_pad.move((gate.xmax - gate_pad.xmax, gate.ymax - gate_pad.ymin))
     gate_via.move(gate_pad.center - gate_via.center)
     source_pad.move((source.xmin - source_pad.xmax, source.ymax - source_pad.ymax))
     drain_pad.move((drain.xmax - drain_pad.xmin, drain.ymax - drain_pad.ymax))
-    gate_via_cover.move(gate_pad.center - gate_via_cover.center)
-    gate_via_conn.move((gate.x - gate_via_conn.x, gate.ymax - gate_via_conn.ymax))
+    if cover_bottom:
+        gate_via_cover.move(gate_pad.center - gate_via_cover.center)
+        gate_via_conn.move((gate.x - gate_via_conn.x, gate.ymax - gate_via_conn.ymax))
     if L_gate != 0:
         TRANSISTOR << gate_pad
         TRANSISTOR << gate_via
-        TRANSISTOR << gate_via_cover
-        TRANSISTOR << gate_via_conn
+        if cover_bottom:
+            TRANSISTOR << gate_via_cover
+            TRANSISTOR << gate_via_conn
     TRANSISTOR << source_pad
     TRANSISTOR << drain_pad
 
@@ -251,6 +262,7 @@ def gated_vdp(
     gated: bool = True,
     rotation: float = 0,
     pad_size: Tuple[float, float] = (100, 100),
+    cover_bottom: bool = True,
     layer_set: LayerSet = LayerSet(),
 ) -> Device:
     """Creates Van-der-Pauw test structure, with optional back gate.
@@ -258,6 +270,7 @@ def gated_vdp(
     Parameters:
         gated (bool): if true, include back gate
         rotation (float): rotation of test structure in degrees
+        cover_bottom (bool): if True, include a pad on sourcedrain layer that overlaps gate layer
         pad_size (tuple(float,float)): pad length and width
         layer_set (LayerSet): layer set to generate alignment marks for
 
@@ -300,10 +313,12 @@ def gated_vdp(
             (pad_size[0], pad_size[1]), layer=layer_set["via"].gds_layer
         )
         via.move(gate_pad.center - via.center)
-        via_cover = VDP << pg.rectangle(
-            (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
-        )
-        via_cover.move(via.center - via_cover.center)
+        if cover_bottom:
+            via_cover = VDP << pg.rectangle(
+                (pad_size[0] + 2, pad_size[1] + 2),
+                layer=layer_set["sourcedrain"].gds_layer,
+            )
+            via_cover.move(via.center - via_cover.center)
         gate_contact = VDP << pg.rectangle(
             ((VDP.xsize - max(pad_size)) / 2**0.5, 10),
             layer=layer_set["gate"].gds_layer,
@@ -356,6 +371,7 @@ def metal_resistor(
     width: float = 5,
     squares: float = 50,
     layer_name: str = "gate",
+    cover_bottom: bool = True,
     pad_size: Tuple[float, float] = (100, 100),
     layer_set: LayerSet = LayerSet(),
 ) -> Device:
@@ -365,6 +381,7 @@ def metal_resistor(
         width (float): wire width in microns
         squares (float): number of squares
         layer_name (string): name of layer to define resistor on
+        cover_bottom (bool): if True, include a pad on sourcedrain layer that overlaps gate layer
         pad_size (tuple(float,float)): pad length and width
         layer_set (LayerSet): layer set to generate alignment marks for
 
@@ -389,27 +406,31 @@ def metal_resistor(
     # add vias
     VIAS = Device("vias")
     via = pg.rectangle((pad_size[0], pad_size[1]), layer=layer_set["via"].gds_layer)
-    via_cover = pg.rectangle(
-        (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
-    )
-    via_conn = pg.rectangle((width + 2, 2), layer=layer_set["sourcedrain"].gds_layer)
+    if cover_bottom:
+        via_cover = pg.rectangle(
+            (pad_size[0] + 2, pad_size[1] + 2), layer=layer_set["sourcedrain"].gds_layer
+        )
+        via_conn = pg.rectangle(
+            (width + 2, 2), layer=layer_set["sourcedrain"].gds_layer
+        )
     for i in range(2):
         contact_i = RESISTOR << contact
         contact_i.connect(contact_i.ports[1], m.ports[i + 1])
         if layer_name == "gate":
             via_i = VIAS << via
             via_i.move(contact_i.center - via_i.center)
-            via_cover_i = VIAS << via_cover
-            via_cover_i.move(contact_i.center - via_cover_i.center)
-            via_conn_i = VIAS << via_conn
-            via_conn_i.move(
-                (
-                    via_i.x - via_conn_i.x,
-                    contact_i.y
-                    + (-1) ** i * (-via_conn_i.ysize / 2 - pad_size[1] / 2)
-                    - via_conn_i.y,
+            if cover_bottom:
+                via_cover_i = VIAS << via_cover
+                via_cover_i.move(contact_i.center - via_cover_i.center)
+                via_conn_i = VIAS << via_conn
+                via_conn_i.move(
+                    (
+                        via_i.x - via_conn_i.x,
+                        contact_i.y
+                        + (-1) ** i * (-via_conn_i.ysize / 2 - pad_size[1] / 2)
+                        - via_conn_i.y,
+                    )
                 )
-            )
     dummy = pg.union(RESISTOR, by_layer=True)
     dummy.add_port(
         name=1, midpoint=(RESISTOR.x, RESISTOR.ymin), width=pad_size[1], orientation=270
@@ -512,6 +533,7 @@ def tlm(
     pad_layer: int = 3,
     mesa_layer: int = 4,
     gate_layer: int = 1,
+    cover_bottom: bool = True,
     pad_size: Tuple[float, float] = (80, 80),
 ) -> Device:
     """Creates transfer-length-method test structures.
@@ -525,6 +547,7 @@ def tlm(
         pad_layer (int): layer for metal pads
         mesa_layer (int): layer for semiconductor
         gate_layer (int): if not None, layer to put gate on
+        cover_bottom (bool): if True, cover finger layer/gate layer with pad layer
         pad_size (tuple(float,float)): width, height of pad
 
     Returns:
@@ -570,10 +593,11 @@ def tlm(
                         pad_via.movey(fp.ymin - pad_via.ymin)
                     else:
                         pad_via.movey(fp.ymax - pad_via.ymax)
-                    top_pad = TLM << pg.rectangle(
-                        size=(fp_w + 2, pad_size[1] + 2), layer=pad_layer
-                    )
-                    top_pad.move(pad_via.center - top_pad.center)
+                    if cover_bottom:
+                        top_pad = TLM << pg.rectangle(
+                            size=(fp_w + 2, pad_size[1] + 2), layer=pad_layer
+                        )
+                        top_pad.move(pad_via.center - top_pad.center)
             xoff = fp.xmax
         text = TLM << pg.text(str(space), layer=finger_layer)
         text.move((xoff - text.xmin + 5, -w / 2 - pad_size[1] + 10 - text.ymin))
@@ -601,17 +625,18 @@ def tlm(
         pad_via = TLM << pg.rectangle(
             size=(gate_pad.xsize, pad_size[1]), layer=via_layer
         )
-        top_pad = TLM << pg.rectangle(
-            size=(gate_pad.xsize + 2, pad_size[1] + 2), layer=pad_layer
-        )
         pad_via.move(gate_pad.center - pad_via.center)
-        top_pad.move(gate_pad.center - top_pad.center)
+        if cover_bottom:
+            top_pad = TLM << pg.rectangle(
+                size=(gate_pad.xsize + 2, pad_size[1] + 2), layer=pad_layer
+            )
+            top_pad.move(gate_pad.center - top_pad.center)
 
     TLM << mesa
     return TLM
 
 
-def test_chip(ls: LayerSet = LayerSet()) -> Device:
+def test_chip(cover_bottom: bool = True, ls: LayerSet = LayerSet()) -> Device:
     #### parameters to sweep ###
 
     # transistors
@@ -686,6 +711,7 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
         vdp = gated_vdp(
             gated=True,
             rotation=i * 45,
+            cover_bottom=cover_bottom,
             pad_size=pad_size,
             layer_set=ls,
         )
@@ -698,6 +724,7 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
         vdp = gated_vdp(
             gated=False,
             rotation=i * 45,
+            cover_bottom=cover_bottom,
             pad_size=pad_size,
             layer_set=ls,
         )
@@ -738,18 +765,18 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
 
     # create MOS CAP and MIM CAP test structures
     MOS = pg.gridsweep(
-        function=lambda L, W: mos_cap(L, 10, W, ls, pad_size),
+        function=lambda L, W: mos_cap(L, 10, W, cover_bottom, ls, pad_size),
         param_x={"L": L_cap},
         param_y={"W": W_cap},
-        spacing=(50, 50),
+        spacing=(50, 50) if cover_bottom else (50, 51),
         separation=True,
         label_layer=None,
     )
     MIM = pg.gridsweep(
-        function=lambda L, W: mim_cap(L, W, ls, pad_size),
+        function=lambda L, W: mim_cap(L, W, cover_bottom, ls, pad_size),
         param_x={"L": L_cap},
         param_y={"W": W_cap},
-        spacing=(50, 50),
+        spacing=(50, 50) if cover_bottom else (51, 51),
         separation=True,
         label_layer=None,
     )
@@ -766,12 +793,13 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
             L_overlap=L_ov,
             W_mesa=W,
             W_contact=W + 4,
+            cover_bottom=cover_bottom,
             layer_set=ls,
             pad_size=pad_size,
         ),
         param_y={"L_g": L_gate},
         param_x={"L_ov": L_overlap, "W": W_channel},
-        spacing=(50, 50),
+        spacing=(50, 50) if cover_bottom else (50, 51),
         separation=True,
         label_layer=None,
     )
@@ -786,6 +814,7 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
             L_overlap=10,
             W_mesa=W,
             W_contact=W + 2,
+            cover_bottom=cover_bottom,
             layer_set=ls,
             pad_size=pad_size,
         ),
@@ -804,6 +833,7 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
             width=5,
             squares=sq,
             layer_name=layer_name,
+            cover_bottom=cover_bottom,
             layer_set=ls,
             pad_size=pad_size,
         ),
@@ -826,6 +856,7 @@ def test_chip(ls: LayerSet = LayerSet()) -> Device:
         pad_layer=ls["sourcedrain"].gds_layer,
         mesa_layer=ls["mesa"].gds_layer,
         gate_layer=ls["gate"].gds_layer if gated else None,
+        cover_bottom=cover_bottom,
         pad_size=tlm_pad_size,
     )
     tlm_1 = TOP << pg.gridsweep(
@@ -885,13 +916,16 @@ if __name__ == "__main__":
         description="ito/igzo mesa",
         color=(0.6, 0.2, 0.5),
     )
-    T = test_chip(ls)
+    T1 = test_chip(False, ls)
+    # T1 = test_chip(True, ls)
+    T2 = test_chip(True, ls)
     # array
     A = Device("array")
     for i in range(8):
         for j in range(8):
-            ij = A << T
+            ij = A << (T1 if j % 2 == 0 else T2)
             ij.move(-ij.center)
+            ij.movey(0 if j % 2 == 0 else 0.5)
             ij.move((7000 * i, 7000 * j))
             label = A << pg.text(
                 text=chr(0x41 + (7 - j)) + str(i + 1),
@@ -901,13 +935,15 @@ if __name__ == "__main__":
             label.move((ij.xmin - label.xmin, ij.ymin - label.ymin))
             label.move((1750, 1050))
     A.move(-A.center)
+    X = pg.cross(length=100, width=2, layer=ls["gate"].gds_layer)
+    for i in range(2):
+        for j in range(2):
+            x = A << X
+            x.move((27200 * (-1) ** i, 27200 * (-1) ** j))
     for _, l in ls._layers.items():
-        X = pg.cross(length=100, width=2, layer=l.gds_layer)
         C = pg.rectangle(size=(10, 10), layer=l.gds_layer)
         for i in range(2):
             for j in range(2):
-                x = A << X
-                x.move((27200 * (-1) ** i, 27200 * (-1) ** j))
                 c = A << C
                 c.move((27295 * (-1) ** i - c.x, 27295 * (-1) ** j - c.y))
     A.write_gds(
