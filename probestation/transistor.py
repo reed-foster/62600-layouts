@@ -3,7 +3,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 fnames = [
-    "after_annealing/after_gas_225deg/w50_l_3_new.dat",
+    # "after_annealing/after_forminggas_225c/w_50_l_10.dat",
+    "after_annealing/after_forminggas_225c/w_50_l_20.dat",
+    # "after_annealing/after_forminggas_225c/w_50_l_3.dat",
+    # "after_annealing/after_forminggas_225c/w_50_l_50.dat",
+    # "after_annealing/after_forminggas_225c/w_50_l_5.dat",
     # "wafer_G/wafer_G_A1_transistor_100_2_2.dat",
     # "wafer_T/wafer_T_A1_transistor_100_1_5.dat",
     # "wafer_T/wafer_T_A1_transistor_100_2_2.dat",
@@ -146,6 +150,7 @@ _, top = ax[1, 1].get_ylim()
 ax[1, 1].set_ylim([-0.1 * top, top])
 ax[1, 0].set_xlabel("Vds [V]")
 ax[1, 0].set_ylabel("Id [uA/um]")
+plt.suptitle(fnames[0])
 # ax[0].set_ylim([1e-9, 1e-2])
 # ax[1].set_ylim([1e-9, 1e-2])
 # fig.tight_layout()
