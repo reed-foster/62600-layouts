@@ -3,143 +3,121 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 fnames = [
-    # "after_annealing/after_forminggas_225c/w_50_l_10.dat",
-    "after_annealing/after_forminggas_225c/w_50_l_20.dat",
-    # "after_annealing/after_forminggas_225c/w_50_l_3.dat",
-    # "after_annealing/after_forminggas_225c/w_50_l_50.dat",
-    # "after_annealing/after_forminggas_225c/w_50_l_5.dat",
-    # "wafer_G/wafer_G_A1_transistor_100_2_2.dat",
-    # "wafer_T/wafer_T_A1_transistor_100_1_5.dat",
-    # "wafer_T/wafer_T_A1_transistor_100_2_2.dat",
-    # "wafer_T/wafer_T_G4_transistor_100_20_5.dat",
-    # "wafer_G_A1_transistor_100_25_2.dat",
-    # "wafer_G_A1_transistor_100_2_5_damaged.dat",
-    # "wafer_G_A1_transistor_100_3_2.dat",
-    # "wafer_G_A1_transistor_100_5_2.dat",
-    # "wafer_G_A8_transistor_100_10_2.dat",
-    # "wafer_G_A8_transistor_100_2_2.dat",
-    # "wafer_G_A8_transistor_100_25_2_again.dat",
-    # "wafer_G_A8_transistor_100_25_2.dat",
-    # "wafer_G_A8_transistor_100_5_2.dat",
-    # "wafer_G_E4_transistor_100_10_2.dat",
-    # "wafer_G_E4_transistor_100_2_2.dat",
-    # "wafer_G_E4_transistor_100_25_2.dat",
-    # "wafer_G_E4_transistor_100_3_2.dat",
-    # "wafer_G_E4_transistor_100_5_2_broken.dat",
-    # "wafer_G_H8_transistor_100_10_2.dat",
-    # "wafer_G_H8_transistor_100_2_2.dat",
-    # "wafer_G_H8_transistor_100_25_2_again.dat",
-    # "wafer_G_H8_transistor_100_25_2.dat",
-    # "wafer_G_H8_transistor_100_2_5.dat",
-    # "wafer_G_H8_transistor_100_5_2.dat",
+    "wafer_V/wafer_V_G8_transistor_100_1_10.dat",
+    "wafer_V/wafer_V_G8_transistor_100_2_10.dat",
+    "wafer_V/wafer_V_G8_transistor_100_3_10.dat",
+    "wafer_V/wafer_V_G8_transistor_100_5_10.dat",
+    "wafer_V/wafer_V_G8_transistor_100_10_10.dat",
+    "wafer_V/wafer_V_G8_transistor_100_20_10.dat",
+    "wafer_V/wafer_V_G8_transistor_100_50_10.dat",
+    # "wafer_W/wafer_W_G8_transistor_100_10_10.dat",
+    # "wafer_W/wafer_W_G8_transistor_100_20_10.dat",
+    # "wafer_W/wafer_W_G8_transistor_100_50_10.dat",
 ]
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 fig, ax = plt.subplots(2, 2)
 legend = []
 
 
-def get_curve_size(fname):
-    data = False
-    num_transfer_Vg = 0
-    num_transfer_Vd = 0
-    num_output_Vg = 0
-    num_output_Vd = 0
-    rowlen_transfer = 0
-    rowlen_output = 0
-    with open(fname) as csvfile:
-        reader = csv.reader(csvfile)
-        for n, row in enumerate(reader):
-            if not data:
-                if len(row) > 0 and row[0] == "IS":
-                    if row[-1] == "ACCSTRESS":
-                        num_transfer_Vd = (len(row) - 2) // 4
-                    else:
-                        num_transfer_Vd = (len(row) - 1) // 4
-                    rowlen_transfer = len(row)
-                    data = True
-                continue
+def alloc_data(reader):
+    parsing = None
+    start = 0
+    stop = 0
+    pts = 0
+    setups = {}
+    for row in reader:
+        if len(row) > 0 and row[0] == "DATA:":
+            break
+        if len(row) > 0 and row[0] == "ID:":
+            parsing = row[1]
+        if parsing is not None:
+            if len(row) > 0 and row[0] == "START:":
+                start = float(row[1])
+            if len(row) > 0 and row[0] == "STOP:":
+                stop = float(row[1])
+            if len(row) > 0 and row[0] == "PNTS:":
+                pts = int(row[1])
             if len(row) == 0:
-                break
-            num_transfer_Vg += 1
-        data = False
-        for n, row in enumerate(reader):
-            if not data:
-                if len(row) > 0 and row[0] == "IS":
-                    if row[-1] == "ACCSTRESS":
-                        num_output_Vg = (len(row) - 2) // 4
-                    else:
-                        num_output_Vg = (len(row) - 1) // 4
-                    rowlen_output = len(row)
-                    data = True
-                continue
-            if len(row) == 0:
-                break
-            num_output_Vd += 1
-
-    return (
-        num_transfer_Vg,
-        num_transfer_Vd,
-        rowlen_transfer,
-        num_output_Vg,
-        num_output_Vd,
-        rowlen_output,
-    )
+                setups[parsing] = np.linspace(start, stop, pts)
+    return setups
 
 
 for f, fname in enumerate(fnames):
-    (
-        num_transfer_Vg,
-        num_transfer_Vd,
-        rowlen_transfer,
-        num_output_Vg,
-        num_output_Vd,
-        rowlen_output,
-    ) = get_curve_size(fname)
     with open(fname) as csvfile:
+        W = float(fname.split("_")[-3])
+        L = float(fname.split("_")[-2])
         reader = csv.reader(csvfile)
-        Vg = np.zeros(num_transfer_Vg)
-        Id = np.zeros((num_transfer_Vg, num_transfer_Vd))
-        Ig = np.zeros((num_transfer_Vg, num_transfer_Vd))
+        # first get transfer curve setup
+        setup = alloc_data(reader)
+        Vg = setup["G"]
+        Vd = setup["D"]
+        Id = np.zeros((Vg.shape[0], Vd.shape[0]))
+        Ig = np.zeros((Vg.shape[0], Vd.shape[0]))
         n_vg = 0
         for n, row in enumerate(reader):
-            if len(row) != rowlen_transfer:
-                if n_vg == 0:
-                    continue
+            if len(row) == 0:
+                continue
+            if row[0] == "TEST":
                 break
             if row[0] == "IS":
                 continue
-            Vg[n_vg] = float(row[3 * num_transfer_Vd])
-            for i in range(num_transfer_Vd):
-                Ig[n_vg, i] = float(row[3 * num_transfer_Vd + 1 + i])
-                Id[n_vg, i] = float(row[2 * num_transfer_Vd + i])
+            Vg[n_vg] = float(row[3 * Vd.shape[0]])
+            for i in range(Vd.shape[0]):
+                Ig[n_vg, i] = float(row[3 * Vd.shape[0] + 1 + i])
+                Id[n_vg, i] = float(row[2 * Vd.shape[0] + i])
             n_vg += 1
-        ax[0, 0].semilogy(Vg, Id * 1e6 / 100, ".", color=colors[0])
-        ax[0, 0].semilogy(Vg, Ig * 1e6 / 100, ".", color=colors[1])
-        ax[0, 1].plot(Vg, Id * 1e6 / 100, ".", color=colors[0])
+        if len(fnames) > 1:
+            Id = Id[:, -1]
+            Ig = Ig[:, -1]
+            label = f"L = {L}um, Vds = {Vd[-1]}V"
+            colorId = colors[f]
+            colorIg = "k"
+        else:
+            label = None
+            colorId = colors[0]
+            colorIg = colors[1]
+        ax[0, 0].semilogy(Vg, Id * 1e6 / W, ".", color=colorId, label=label)
+        ax[0, 0].semilogy(Vg, Ig * 1e6 / W, ".", color=colorIg, label=None)
+        ax[0, 1].plot(Vg, Id * 1e6 / W, ".", color=colorId, label=label)
         ax[1, 1].plot(
             Vg[1:],
-            (np.diff(Id, axis=0).T / np.diff(Vg)).T * 1e6 / 100,
+            (np.diff(Id, axis=0).T / np.diff(Vg)).T * 1e6 / W,
             ".",
-            color=colors[1],
+            color=colorId,
+            label=label,
         )
-        Vd = np.zeros(num_output_Vd)
-        Id = np.zeros((num_output_Vd, num_output_Vg))
-        Ig = np.zeros((num_output_Vd, num_output_Vg))
+        setup = alloc_data(reader)
+        Vd = setup["D"]
+        Vg = setup["G"]
+        Id = np.zeros((Vd.shape[0], Vg.shape[0]))
+        Ig = np.zeros((Vd.shape[0], Vg.shape[0]))
         n_vd = 0
         for n, row in enumerate(reader):
-            if len(row) != rowlen_output:
-                if n_vd == 0:
-                    continue
+            if len(row) == 0:
+                continue
+            if row[0] == "TEST":
                 break
             if row[0] == "IS":
                 continue
-            Vd[n_vd] = float(row[num_output_Vg])
-            for i in range(num_output_Vg):
-                Ig[n_vd, i] = float(row[3 * num_output_Vg + 1 + i])
-                Id[n_vd, i] = float(row[num_output_Vg + 1 + i])
+            Vd[n_vd] = float(row[Vg.shape[0]])
+            for i in range(Vg.shape[0]):
+                Ig[n_vd, i] = float(row[3 * Vg.shape[0] + 1 + i])
+                Id[n_vd, i] = float(row[Vg.shape[0] + 1 + i])
             n_vd += 1
-        ax[1, 0].plot(Vd, Id * 1e6 / 100, ".", color=colors[0])
+        if len(fnames) > 1:
+            Id = Id[:, [0, -1]]
+            Ig = Ig[:, [0, -1]]
+            label = [f"L = {L}um, Vgs = {Vg[0]}V, {Vg[-1]}V", None]
+            color = colors[f]
+        else:
+            color = colors[0]
+            label = None
+        ax[1, 0].plot(Vd, Id * 1e6 / W, ".", color=color, label=label)
 
+ax[0, 0].legend(loc="lower right")
+ax[1, 0].legend(loc="upper left")
+ax[0, 1].legend(loc="upper left")
+ax[1, 1].legend(loc="upper left")
 ax[0, 0].set_xlabel("Vgs [V]")
 ax[0, 1].set_xlabel("Vgs [V]")
 ax[0, 0].set_ylabel("Id,Ig [uA/um]")
