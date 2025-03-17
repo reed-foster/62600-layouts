@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 fnames = [
-    "after_annealing/after_gas_225deg/w50_l_3_new.dat",
+    r"after_annealing\after_annealing\after_Nitrogen_annealing\w_50_L_50_new.dat"
     # "wafer_G/wafer_G_A1_transistor_100_2_2.dat",
     # "wafer_T/wafer_T_A1_transistor_100_1_5.dat",
     # "wafer_T/wafer_T_A1_transistor_100_2_2.dat",
@@ -136,6 +136,7 @@ for f, fname in enumerate(fnames):
             n_vd += 1
         ax[1, 0].plot(Vd, Id * 1e6 / 100, ".", color=colors[0])
 
+fig.suptitle("W = 50 µm, L = 50 µm, Nitrogen at 300 °C", fontsize=14)
 ax[0, 0].set_xlabel("Vgs [V]")
 ax[0, 1].set_xlabel("Vgs [V]")
 ax[0, 0].set_ylabel("Id,Ig [uA/um]")
@@ -149,4 +150,121 @@ ax[1, 0].set_ylabel("Id [uA/um]")
 # ax[0].set_ylim([1e-9, 1e-2])
 # ax[1].set_ylim([1e-9, 1e-2])
 # fig.tight_layout()
+plt.show()
+
+
+
+
+#%%
+
+
+fnames = [
+    r"after_annealing/after_annealing/after_Nitrogen_annealing/w_50_L_50_new.dat"
+]
+
+colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+fig, ax = plt.subplots()
+
+def get_curve_size(fname):
+    data = False
+    num_transfer_Vg = 0
+    num_transfer_Vd = 0
+    rowlen_transfer = 0
+    with open(fname) as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            if not data:
+                if len(row) > 0 and row[0] == "IS":
+                    num_transfer_Vd = (len(row) - 1) // 4
+                    rowlen_transfer = len(row)
+                    data = True
+                continue
+            if len(row) == 0:
+                break
+            num_transfer_Vg += 1
+    return num_transfer_Vg, num_transfer_Vd, rowlen_transfer
+
+for fname in fnames:
+    num_transfer_Vg, num_transfer_Vd, rowlen_transfer = get_curve_size(fname)
+    with open(fname) as csvfile:
+        reader = csv.reader(csvfile)
+        Vg = np.zeros(num_transfer_Vg)
+        Id = np.zeros((num_transfer_Vg, num_transfer_Vd))
+        n_vg = 0
+        for row in reader:
+            if len(row) != rowlen_transfer:
+                if n_vg == 0:
+                    continue
+                break
+            if row[0] == "IS":
+                continue
+            Vg[n_vg] = float(row[3 * num_transfer_Vd])
+            for i in range(num_transfer_Vd):
+                Id[n_vg, i] = float(row[2 * num_transfer_Vd + i])
+            n_vg += 1
+        ax.semilogy(Vg, Id * 1e6 / 100, ".", color=colors[0])
+
+fig.suptitle("W = 50 µm, L = 50 µm, Nitrogen at 300 °C", fontsize=14)
+ax.set_xlabel("Vgs [V]")
+ax.set_ylabel("Id [uA/um]")
+plt.show()
+
+
+
+#%%
+
+import csv
+import numpy as np
+import matplotlib.pyplot as plt
+
+fnames = [ 
+    r"after_annealing/after_annealing/after_Nitrogen_annealing/w_50_L_50_new.dat",
+    r"after_annealing/after_annealing/after_Nitrogen_annealing/w_50_L_3_new.dat"
+]
+
+colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+fig, ax = plt.subplots()
+
+def get_curve_size(fname):
+    data = False
+    num_transfer_Vg = 0
+    num_transfer_Vd = 0
+    rowlen_transfer = 0
+    with open(fname) as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            if not data:
+                if len(row) > 0 and row[0] == "IS":
+                    num_transfer_Vd = (len(row) - 1) // 4
+                    rowlen_transfer = len(row)
+                    data = True
+                continue
+            if len(row) == 0:
+                break
+            num_transfer_Vg += 1
+    return num_transfer_Vg, num_transfer_Vd, rowlen_transfer
+
+for i, fname in enumerate(fnames):
+    num_transfer_Vg, num_transfer_Vd, rowlen_transfer = get_curve_size(fname)
+    with open(fname) as csvfile:
+        reader = csv.reader(csvfile)
+        Vg = np.zeros(num_transfer_Vg)
+        Id = np.zeros(num_transfer_Vg)
+        n_vg = 0
+        for row in reader:
+            if len(row) != rowlen_transfer:
+                if n_vg == 0:
+                    continue
+                break
+            if row[0] == "IS":
+                continue
+            Vg[n_vg] = float(row[3 * num_transfer_Vd])
+            Id[n_vg] = float(row[2 * num_transfer_Vd])  # Only first Id curve
+            n_vg += 1
+        ax.semilogy(Vg, Id * 1e6 / 100, ".", color=colors[i % len(colors)], label=fname.split("/")[-1])
+
+fig.suptitle("W = 50 µm, L = Variable, Nitrogen at 300 °C", fontsize=14)
+ax.set_xlabel("Vgs [V]")
+ax.set_ylabel("Id [uA/um]")
+ax.legend()
 plt.show()
