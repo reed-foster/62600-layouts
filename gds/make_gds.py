@@ -575,6 +575,7 @@ def tlm(
             else:
                 fp.movey(-fp.ymin - contact_w / 2 - 5)
                 fp.movex(xoff - fp.xmin + 50)
+            xoff = fp.xmax
             if finger_layer < via_layer:
                 via = TLM << pg.rectangle(
                     size=(contact_l, contact_w + 10), layer=via_layer
@@ -598,7 +599,6 @@ def tlm(
                             size=(fp_w + 2, pad_size[1] + 2), layer=pad_layer
                         )
                         top_pad.move(pad_via.center - top_pad.center)
-            xoff = fp.xmax
         text = TLM << pg.text(str(space), layer=finger_layer)
         text.move((xoff - text.xmin + 5, -w / 2 - pad_size[1] + 10 - text.ymin))
         if gate_layer is not None:
@@ -768,7 +768,7 @@ def test_chip(cover_bottom: bool = True, ls: LayerSet = LayerSet()) -> Device:
         function=lambda L, W: mos_cap(L, 10, W, cover_bottom, ls, pad_size),
         param_x={"L": L_cap},
         param_y={"W": W_cap},
-        spacing=(50, 50) if cover_bottom else (50, 51),
+        spacing=(50, 50) if cover_bottom else (51, 51),
         separation=True,
         label_layer=None,
     )
@@ -784,6 +784,9 @@ def test_chip(cover_bottom: bool = True, ls: LayerSet = LayerSet()) -> Device:
     mim = TOP << MIM
     mos.move((2900 - mos.xmin, -mos.ymin))
     mim.move((2900 - mim.xmin, mos.ymax - mim.ymin + 50))
+    if not cover_bottom:
+        mos.move((1, 1))
+        mim.move((1, 1))
 
     # create transistors
     TRANSISTOR = pg.gridsweep(
@@ -919,13 +922,17 @@ if __name__ == "__main__":
     T1 = test_chip(False, ls)
     # T1 = test_chip(True, ls)
     T2 = test_chip(True, ls)
+    print(T1.xsize, T1.ysize)
+    print(T2.xsize, T2.ysize)
     # array
     A = Device("array")
     for i in range(8):
         for j in range(8):
-            ij = A << (T1 if j % 2 == 0 else T2)
+            cover_bottom = (i + j) % 2
+            ij = A << (T1 if cover_bottom == 0 else T2)
             ij.move(-ij.center)
-            ij.movey(0 if j % 2 == 0 else 0.5)
+            ij.movey(0 if cover_bottom == 0 else 0.5)
+            # ij.movex(0 if cover_bottom == 0 else 0.5)
             ij.move((7000 * i, 7000 * j))
             label = A << pg.text(
                 text=chr(0x41 + (7 - j)) + str(i + 1),
